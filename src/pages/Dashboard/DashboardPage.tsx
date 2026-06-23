@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Building2, 
-  Package, 
-  Layers, 
-  ArrowLeftRight, 
-  FileClock, 
+import {
+  Building2,
+  Package,
+  Layers,
+  ArrowLeftRight,
+  FileClock,
   AlertTriangle,
   ArrowUpRight,
   PlusCircle,
@@ -27,10 +27,11 @@ import { warehousesApi } from '../../api/warehouses.api';
 import type { OperationsRequest } from '../../types/request';
 import type { OrganizationNode } from '../../types/hierarchy';
 import type { TransferTransaction } from '../../types/transaction';
+import type { Warehouse } from '../../types/warehouse';
 
 export default function DashboardPage() {
   const navigate = useNavigate();
-  
+
   // States
   const [flatNodes, setFlatNodes] = useState<OrganizationNode[]>([]);
   const [totalStockItems, setTotalStockItems] = useState<number>(0);
@@ -39,6 +40,7 @@ export default function DashboardPage() {
   const [requests, setRequests] = useState<OperationsRequest[]>([]);
   const [lowStockCount, setLowStockCount] = useState<number>(0);
   const [activeWarehousesCount, setActiveWarehousesCount] = useState<number>(0);
+  const [warehousesList, setWarehousesList] = useState<Warehouse[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Modals state
@@ -46,8 +48,17 @@ export default function DashboardPage() {
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
 
   // Form states
-  const [requestForm, setRequestForm] = useState({
+  const [requestForm, setRequestForm] = useState<{
+    unitId: string;
+    type: 'transfer' | 'consumption' | 'return' | 'damage' | 'waste' | 'disposal';
+    creator: string;
+    itemName: string;
+    requiredQty: number;
+    unit: string;
+    notes: string;
+  }>({
     unitId: '',
+    type: 'transfer',
     creator: 'عبدالرحمن محمد',
     itemName: '',
     requiredQty: 10,
@@ -94,11 +105,6 @@ export default function DashboardPage() {
       // Initialize default selectors if not set
       if (flat.length > 0) {
         setRequestForm(prev => prev.unitId ? prev : { ...prev, unitId: flat[0].id });
-        setTransferForm(prev => {
-          const fromId = prev.fromUnitId || flat[0].id;
-          const toId = prev.toUnitId || (flat[1] ? flat[1].id : flat[0].id);
-          return { ...prev, fromUnitId: fromId, toUnitId: toId };
-        });
       }
 
       // 2. Fetch all stock items to sum operational qty
@@ -122,6 +128,17 @@ export default function DashboardPage() {
       // 6. Fetch active warehouses count
       const warehouses = await warehousesApi.getWarehouses();
       setActiveWarehousesCount(warehouses.filter(w => w.status === 'active').length);
+      setWarehousesList(warehouses);
+
+      // Default for transfer units using real warehouses
+      if (warehouses.length > 0) {
+        setRequestForm(prev => prev.unitId ? prev : { ...prev, unitId: warehouses[0].id });
+        setTransferForm(prev => {
+          const fromId = prev.fromUnitId || warehouses[0].id;
+          const toId = prev.toUnitId || (warehouses[1] ? warehouses[1].id : warehouses[0].id);
+          return { ...prev, fromUnitId: fromId, toUnitId: toId };
+        });
+      }
 
     } catch (error) {
       console.error('Error loading dashboard data', error);
@@ -161,12 +178,13 @@ export default function DashboardPage() {
   const handleRequestSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const selectedUnit = flatNodes.find(un => un.id === requestForm.unitId);
-      
+      const selectedUnit = warehousesList.find(un => un.id === requestForm.unitId);
+
       await requestsApi.createRequest({
         requestingNodeId: Number(requestForm.unitId.replace(/\D/g, '')) || 11,
         requestingNodeName: selectedUnit ? selectedUnit.name : 'مطبخ جاردن الشرقي',
         createdBy: requestForm.creator,
+        type: requestForm.type,
         items: [
           {
             itemCode: 'ITEM-' + Date.now(),
@@ -269,9 +287,9 @@ export default function DashboardPage() {
           { label: 'الطلبات المعلقة', value: pendingRequests, icon: FileClock, color: 'text-amber-600 bg-amber-50 border-amber-100', link: '/requests' },
           { label: 'منخفض المخزون', value: lowStockCount, icon: AlertTriangle, color: `text-red-600 bg-red-50 border-red-100`, link: '/inventory' }
         ].map((kpi, idx) => (
-          <Card 
-            key={idx} 
-            hoverable 
+          <Card
+            key={idx}
+            hoverable
             className="cursor-pointer border-slate-200/60"
             onClick={() => navigate(kpi.link)}
           >
@@ -292,7 +310,7 @@ export default function DashboardPage() {
 
       {/* Main Sections Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
+
         {/* Recent Activity Timeline (Takes 2 Cols) */}
         <div className="lg:col-span-2 flex flex-col gap-4">
           <div className="flex justify-between items-center">
@@ -361,11 +379,11 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 gap-3">
               {[
                 { title: 'عرض المخزون', desc: 'استعراض مستويات وكميات السلع وتصديرها', onClick: () => navigate('/inventory'), icon: Eye, color: 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100' },
-                { title: 'إنشاء طلب تموين', desc: 'تقديم طلب صرف بضائع لمركز تكلفة أو مطبخ', onClick: () => setIsRequestModalOpen(true), icon: PlusCircle, color: 'bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100' },
-                { title: 'إنشاء تحويل بيني', desc: 'نقل كميات بين الأقسام والبارات والمطابخ', onClick: () => setIsTransferModalOpen(true), icon: ArrowLeftRight, color: 'bg-indigo-50 text-indigo-600 border-indigo-100 hover:bg-indigo-100' },
+                { title: 'إنشاء طلب مخزني', desc: 'تقديم طلب صرف، هدر، أو إرجاع للمستودعات', onClick: () => setIsRequestModalOpen(true), icon: PlusCircle, color: 'bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100' },
+                { title: 'نقل بين المخازن', desc: 'نقل كميات بين الأقسام والبارات والمطابخ', onClick: () => setIsTransferModalOpen(true), icon: ArrowLeftRight, color: 'bg-indigo-50 text-indigo-600 border-indigo-100 hover:bg-indigo-100' },
                 { title: 'استعراض الوحدات', desc: 'تتبع الهيكل الإداري والعهدة التشغيلية', onClick: () => navigate('/organization'), icon: Building2, color: 'bg-purple-50 text-purple-600 border-purple-100 hover:bg-purple-100' }
               ].map((act, idx) => (
-                <div 
+                <div
                   key={idx}
                   onClick={act.onClick}
                   className="flex items-center gap-3 p-3 bg-white border border-slate-200/80 rounded-xl hover:border-slate-300 transition-all cursor-pointer group"
@@ -418,7 +436,7 @@ export default function DashboardPage() {
       </div>
 
       {/* CREATE REQUEST MODAL */}
-      <Modal isOpen={isRequestModalOpen} onClose={() => setIsRequestModalOpen(false)} title="تقديم طلب تموين جديد">
+      <Modal isOpen={isRequestModalOpen} onClose={() => setIsRequestModalOpen(false)} title="تقديم طلب مخزني جديد">
         {formSuccessMessage ? (
           <div className="flex flex-col items-center justify-center py-6 text-center gap-3">
             <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center border border-emerald-100">
@@ -428,41 +446,58 @@ export default function DashboardPage() {
           </div>
         ) : (
           <form onSubmit={handleRequestSubmit} className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-slate-700">الجهة الطالبة (القسم/المستودع)</label>
-              <select 
-                value={requestForm.unitId} 
-                onChange={(e) => setRequestForm({...requestForm, unitId: e.target.value})}
-                className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-              >
-                {flatNodes.map(node => (
-                  <option key={node.id} value={node.id}>{node.name}</option>
-                ))}
-              </select>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-slate-700">نوع الطلب</label>
+                <select
+                  value={requestForm.type}
+                  onChange={(e) => setRequestForm({ ...requestForm, type: e.target.value as any })}
+                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="transfer">تحويل داخلي</option>
+                  <option value="consumption">استهلاك قسم</option>
+                  <option value="return">مرتجع مستودع</option>
+                  <option value="damage">تلفيات</option>
+                  <option value="waste">هالك هدر</option>
+                  <option value="disposal">إعدام مواد</option>
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-slate-700">الجهة الطالبة (القسم/المستودع)</label>
+                <select
+                  value={requestForm.unitId}
+                  onChange={(e) => setRequestForm({ ...requestForm, unitId: e.target.value })}
+                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                >
+                  {warehousesList.map(w => (
+                    <option key={w.id} value={w.id}>{w.name}</option>
+                  ))}
+                </select>
+              </div>
             </div>
-            
-            <Input 
-              label="اسم الصنف المطلوب" 
-              placeholder="مثال: بن هرري محمص فاخر" 
+
+            <Input
+              label="اسم الصنف المطلوب"
+              placeholder="مثال: بن هرري محمص فاخر"
               required
               value={requestForm.itemName}
-              onChange={(e) => setRequestForm({...requestForm, itemName: e.target.value})}
+              onChange={(e) => setRequestForm({ ...requestForm, itemName: e.target.value })}
             />
 
             <div className="grid grid-cols-2 gap-4">
-              <Input 
-                label="الكمية المطلوبة" 
-                type="number" 
-                min={1} 
+              <Input
+                label="الكمية المطلوبة"
+                type="number"
+                min={1}
                 required
                 value={requestForm.requiredQty}
-                onChange={(e) => setRequestForm({...requestForm, requiredQty: Number(e.target.value)})}
+                onChange={(e) => setRequestForm({ ...requestForm, requiredQty: Number(e.target.value) })}
               />
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-bold text-slate-700">وحدة القياس</label>
-                <select 
-                  value={requestForm.unit} 
-                  onChange={(e) => setRequestForm({...requestForm, unit: e.target.value})}
+                <select
+                  value={requestForm.unit}
+                  onChange={(e) => setRequestForm({ ...requestForm, unit: e.target.value })}
                   className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 >
                   <option value="كجم">كجم</option>
@@ -474,16 +509,16 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <Input 
-              label="اسم مقدم الطلب" 
+            <Input
+              label="اسم مقدم الطلب"
               required
               value={requestForm.creator}
-              onChange={(e) => setRequestForm({...requestForm, creator: e.target.value})}
+              onChange={(e) => setRequestForm({ ...requestForm, creator: e.target.value })}
             />
 
             <div className="flex justify-end gap-2 mt-4">
               <Button type="button" variant="outline" onClick={() => setIsRequestModalOpen(false)}>إلغاء</Button>
-              <Button type="submit" variant="primary">تقديم الطلب الاعتمادي</Button>
+              <Button type="submit" variant="primary">تقديم الطلب</Button>
             </div>
           </form>
         )}
@@ -503,26 +538,26 @@ export default function DashboardPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-bold text-slate-700">من وحدة (المصدر)</label>
-                <select 
-                  value={transferForm.fromUnitId} 
-                  onChange={(e) => setTransferForm({...transferForm, fromUnitId: e.target.value})}
+                <select
+                  value={transferForm.fromUnitId}
+                  onChange={(e) => setTransferForm({ ...transferForm, fromUnitId: e.target.value })}
                   className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 >
-                  {flatNodes.map(node => (
-                    <option key={node.id} value={node.id}>{node.name}</option>
+                  {warehousesList.map(w => (
+                    <option key={w.id} value={w.id}>{w.name}</option>
                   ))}
                 </select>
               </div>
 
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-bold text-slate-700">إلى وحدة (المستهدف)</label>
-                <select 
-                  value={transferForm.toUnitId} 
-                  onChange={(e) => setTransferForm({...transferForm, toUnitId: e.target.value})}
+                <select
+                  value={transferForm.toUnitId}
+                  onChange={(e) => setTransferForm({ ...transferForm, toUnitId: e.target.value })}
                   className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 >
-                  {flatNodes.map(node => (
-                    <option key={node.id} value={node.id}>{node.name}</option>
+                  {warehousesList.map(w => (
+                    <option key={w.id} value={w.id}>{w.name}</option>
                   ))}
                 </select>
               </div>
@@ -540,9 +575,9 @@ export default function DashboardPage() {
                   لا توجد أصناف متوفرة في الوحدة المصدر المختارة!
                 </div>
               ) : (
-                <select 
-                  value={transferForm.sku} 
-                  onChange={(e) => setTransferForm({...transferForm, sku: e.target.value})}
+                <select
+                  value={transferForm.sku}
+                  onChange={(e) => setTransferForm({ ...transferForm, sku: e.target.value })}
                   className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 >
                   {sourceNodeItems.map(item => (
@@ -555,28 +590,28 @@ export default function DashboardPage() {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <Input 
-                label="الكمية المحولة" 
-                type="number" 
-                min={1} 
+              <Input
+                label="الكمية المحولة"
+                type="number"
+                min={1}
                 required
                 disabled={sourceNodeItems.length === 0}
                 value={transferForm.quantity}
-                onChange={(e) => setTransferForm({...transferForm, quantity: Number(e.target.value)})}
+                onChange={(e) => setTransferForm({ ...transferForm, quantity: Number(e.target.value) })}
               />
-              <Input 
-                label="المسؤول المفوّض" 
+              <Input
+                label="المسؤول المفوّض"
                 required
                 value={transferForm.handler}
-                onChange={(e) => setTransferForm({...transferForm, handler: e.target.value})}
+                onChange={(e) => setTransferForm({ ...transferForm, handler: e.target.value })}
               />
             </div>
 
-            <Input 
-              label="ملاحظات التحويل" 
-              placeholder="مثال: تحويل عاجل لسد عجز المخزون بالفندق الرئيسي" 
+            <Input
+              label="ملاحظات التحويل"
+              placeholder="مثال: تحويل عاجل لسد عجز المخزون بالفندق الرئيسي"
               value={transferForm.notes}
-              onChange={(e) => setTransferForm({...transferForm, notes: e.target.value})}
+              onChange={(e) => setTransferForm({ ...transferForm, notes: e.target.value })}
             />
 
             <div className="flex justify-end gap-2 mt-4">

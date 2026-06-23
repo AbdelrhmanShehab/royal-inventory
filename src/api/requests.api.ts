@@ -93,6 +93,7 @@ export const transformRequest = (req: any): OperationsRequest => {
     requestingNodeName: req.requestingNodeName || req.requestingUnitName || 'غير معروف',
     createdBy: req.createdBy || req.creator || 'غير معروف',
     createdAt: req.createdAt || '',
+    type: req.type || 'supply',
     status: req.status || 'pending',
     notes: req.notes || undefined,
     items: (req.items || []).map((i: any) => ({
@@ -138,6 +139,7 @@ export const requestsApi = {
     requestingNodeId: number;
     requestingNodeName: string;
     createdBy: string;
+    type?: 'transfer' | 'consumption' | 'return' | 'damage' | 'waste' | 'disposal';
     items: RequestItem[];
   }): Promise<OperationsRequest> => {
     try {
@@ -150,6 +152,7 @@ export const requestsApi = {
         id: Math.floor(5000 + Math.random() * 1000),
         requestingNodeId: data.requestingNodeId,
         requestingNodeName: data.requestingNodeName,
+        type: data.type || 'supply',
         status: 'pending',
         createdBy: data.createdBy,
         createdAt: new Date().toISOString().replace('T', ' ').substring(0, 16),

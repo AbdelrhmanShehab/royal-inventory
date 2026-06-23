@@ -3,7 +3,9 @@ import {
   History, 
   ArrowUpDown, 
   ArrowLeftRight, 
-  Download
+  Download,
+  PlusCircle,
+  CheckCircle2
 } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
@@ -11,17 +13,43 @@ import Button from '../../components/ui/Button';
 import Drawer from '../../components/ui/Drawer';
 import Loader from '../../components/ui/Loader';
 import EmptyState from '../../components/ui/EmptyState';
+import Modal from '../../components/ui/Modal';
+import Input from '../../components/ui/Input';
 import { transactionsApi } from '../../api/transactions.api';
 import { hierarchyApi } from '../../api/hierarchy.api';
+import { requestsApi } from '../../api/requests.api';
+import { warehousesApi } from '../../api/warehouses.api';
 import type { TransferTransaction } from '../../types/transaction';
 import type { OrganizationNode } from '../../types/hierarchy';
+import type { Warehouse } from '../../types/warehouse';
 
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<TransferTransaction[]>([]);
   const [nodes, setNodes] = useState<OrganizationNode[]>([]);
+  const [warehousesList, setWarehousesList] = useState<Warehouse[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTx, setSelectedTx] = useState<TransferTransaction | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  const [formSuccessMessage, setFormSuccessMessage] = useState('');
+
+  const [requestForm, setRequestForm] = useState<{
+    unitId: string;
+    type: 'transfer' | 'consumption' | 'return' | 'damage' | 'waste' | 'disposal';
+    creator: string;
+    itemName: string;
+    requiredQty: number;
+    unit: string;
+    notes: string;
+  }>({
+    unitId: '',
+    type: 'transfer',
+    creator: 'عبدالرحمن محمد',
+    itemName: '',
+    requiredQty: 10,
+    unit: 'كجم',
+    notes: ''
+  });
 
   // Filters State
   const [filterType, setFilterType] = useState('');
@@ -57,6 +85,12 @@ export default function TransactionsPage() {
       const tree = await hierarchyApi.getTree();
       const flat = flattenNodes(tree);
       setNodes(flat);
+
+      const warehouses = await warehousesApi.getWarehouses();
+      setWarehousesList(warehouses);
+      if (warehouses.length > 0) {
+        setRequestForm(prev => prev.unitId ? prev : { ...prev, unitId: warehouses[0].id });
+      }
     } catch (err) {
       console.error('Error loading transactions data:', err);
     } finally {
@@ -67,6 +101,43 @@ export default function TransactionsPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  const handleRequestSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const selectedUnit = warehousesList.find(un => un.id === requestForm.unitId);
+
+      await requestsApi.createRequest({
+        requestingNodeId: Number(requestForm.unitId.replace(/\D/g, '')) || 11,
+        requestingNodeName: selectedUnit ? selectedUnit.name : 'مستودع غير معروف',
+        createdBy: requestForm.creator,
+        type: requestForm.type,
+        items: [
+          {
+            itemCode: 'ITEM-' + Date.now(),
+            itemName: requestForm.itemName,
+            unit: requestForm.unit,
+            requestedQty: Number(requestForm.requiredQty)
+          }
+        ]
+      });
+
+      setFormSuccessMessage('تم تقديم الطلب بنجاح!');
+      setTimeout(() => {
+        setIsRequestModalOpen(false);
+        setFormSuccessMessage('');
+        setRequestForm(prev => ({
+          ...prev,
+          itemName: '',
+          requiredQty: 10,
+          notes: ''
+        }));
+        loadData();
+      }, 1500);
+    } catch (error) {
+      console.error(error);
+    }
+  };
 
   // Map node ID to name helper
   const getNodeName = (nodeId?: number | string) => {
@@ -153,10 +224,16 @@ export default function TransactionsPage() {
             <History size={18} className="text-blue-600" />
             تتبع الحركات والتحويلات المخزنية
           </h1>
-          <Button variant="outline" size="sm" onClick={handleExport} disabled={filteredTxs.length === 0}>
-            <Download size={14} />
-            تصدير تقرير الحركات
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={handleExport} disabled={filteredTxs.length === 0}>
+              <Download size={14} />
+              تصدير تقرير الحركات
+            </Button>
+            <Button variant="primary" size="sm" onClick={() => setIsRequestModalOpen(true)}>
+              <PlusCircle size={14} />
+              إنشاء طلب مخزني
+            </Button>
+          </div>
         </div>
 
         {/* Input filters */}
@@ -399,6 +476,94 @@ export default function TransactionsPage() {
           </div>
         )}
       </Drawer>
+
+      <Modal isOpen={isRequestModalOpen} onClose={() => setIsRequestModalOpen(false)} title="تقديم طلب مخزني جديد">
+        {formSuccessMessage ? (
+          <div className="flex flex-col items-center justify-center py-6 text-center gap-3">
+            <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center border border-emerald-100">
+              <CheckCircle2 size={24} />
+            </div>
+            <p className="text-sm font-bold text-slate-800">{formSuccessMessage}</p>
+          </div>
+        ) : (
+          <form onSubmit={handleRequestSubmit} className="flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-slate-700">نوع الطلب</label>
+                <select
+                  value={requestForm.type}
+                  onChange={(e) => setRequestForm({ ...requestForm, type: e.target.value as any })}
+                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="transfer">تحويل داخلي</option>
+                  <option value="consumption">استهلاك قسم</option>
+                  <option value="return">مرتجع مستودع</option>
+                  <option value="damage">تلفيات</option>
+                  <option value="waste">هالك هدر</option>
+                  <option value="disposal">إعدام مواد</option>
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-slate-700">الجهة الطالبة (القسم/المستودع)</label>
+                <select
+                  value={requestForm.unitId}
+                  onChange={(e) => setRequestForm({ ...requestForm, unitId: e.target.value })}
+                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                >
+                  {warehousesList.map(w => (
+                    <option key={w.id} value={w.id}>{w.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <Input
+              label="اسم الصنف المطلوب"
+              placeholder="مثال: بن هرري محمص فاخر"
+              required
+              value={requestForm.itemName}
+              onChange={(e) => setRequestForm({ ...requestForm, itemName: e.target.value })}
+            />
+
+            <div className="grid grid-cols-2 gap-4">
+              <Input
+                label="الكمية المطلوبة"
+                type="number"
+                min={1}
+                required
+                value={requestForm.requiredQty}
+                onChange={(e) => setRequestForm({ ...requestForm, requiredQty: Number(e.target.value) })}
+              />
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-slate-700">وحدة القياس</label>
+                <select
+                  value={requestForm.unit}
+                  onChange={(e) => setRequestForm({ ...requestForm, unit: e.target.value })}
+                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="كجم">كجم</option>
+                  <option value="لتر">لتر</option>
+                  <option value="حبة">حبة</option>
+                  <option value="كرتون">كرتون</option>
+                  <option value="جالون">جالون</option>
+                </select>
+              </div>
+            </div>
+
+            <Input
+              label="اسم مقدم الطلب"
+              required
+              value={requestForm.creator}
+              onChange={(e) => setRequestForm({ ...requestForm, creator: e.target.value })}
+            />
+
+            <div className="flex justify-end gap-2 mt-4">
+              <Button type="button" variant="outline" onClick={() => setIsRequestModalOpen(false)}>إلغاء</Button>
+              <Button type="submit" variant="primary">تقديم الطلب</Button>
+            </div>
+          </form>
+        )}
+      </Modal>
 
     </div>
   );

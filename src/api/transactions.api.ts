@@ -1,6 +1,45 @@
 import api from './axios';
 import type { TransferTransaction } from '../types/transaction';
 
+// Local Storage Keys for Mock Simulation
+const MOCK_TRANSACTIONS_KEY = 'royal_inventory_mock_transactions';
+
+const initializeMockTransactions = (): any[] => {
+  const existing = localStorage.getItem(MOCK_TRANSACTIONS_KEY);
+  if (existing) {
+    try {
+      return JSON.parse(existing);
+    } catch {
+      // ignore
+    }
+  }
+
+  const initialTransactions = [
+    {
+      txnId: 1001,
+      txnType: 'transfer',
+      sku: 'ITEM-001',
+      quantity: 50,
+      unit: 'كجم',
+      fromNodeId: 1,
+      toNodeId: 11,
+      fromNodeName: 'المستودع الرئيسي',
+      toNodeName: 'مطبخ جاردن الشرقي',
+      createdAt: '2026-06-16 09:00',
+      createdBy: 'أمين المستودع',
+      status: 'completed'
+    }
+  ];
+
+  localStorage.setItem(MOCK_TRANSACTIONS_KEY, JSON.stringify(initialTransactions));
+  return initialTransactions;
+};
+
+const getLocalTransactions = () => initializeMockTransactions();
+const saveLocalTransactions = (txs: any[]) => {
+  localStorage.setItem(MOCK_TRANSACTIONS_KEY, JSON.stringify(txs));
+};
+
 // Transform backend txn to TransferTransaction
 export const transformTransferTransaction = (tx: any): TransferTransaction => {
   return {
@@ -23,12 +62,17 @@ export const transformTransferTransaction = (tx: any): TransferTransaction => {
 
 export const transactionsApi = {
   getTransfers: async (): Promise<TransferTransaction[]> => {
-    const response = await api.get('/transactions/transfers');
-    const data = response.data;
-    if (Array.isArray(data)) {
-      return data.map(transformTransferTransaction);
+    try {
+      const response = await api.get('/transactions/transfers');
+      const data = response.data;
+      if (Array.isArray(data)) {
+        return data.map(transformTransferTransaction);
+      }
+      return [];
+    } catch (error) {
+      console.warn('Transactions API endpoint unreachable, falling back to local simulation.', error);
+      return getLocalTransactions().map(transformTransferTransaction);
     }
-    return [];
   },
 
   createTransfer: async (data: {
@@ -39,8 +83,31 @@ export const transactionsApi = {
     handler: string;
     notes?: string;
   }): Promise<TransferTransaction> => {
-    const response = await api.post('/transactions/transfers', data);
-    return transformTransferTransaction(response.data);
+    try {
+      const response = await api.post('/transactions/transfers', data);
+      return transformTransferTransaction(response.data);
+    } catch (error) {
+      console.warn('Transactions API endpoint unreachable, falling back to local simulation.', error);
+      const txs = getLocalTransactions();
+      const newTx = {
+        txnId: Math.floor(1000 + Math.random() * 9000),
+        txnType: 'transfer',
+        sku: data.sku,
+        quantity: data.quantity,
+        unit: 'وحدة',
+        fromNodeId: data.fromUnitId,
+        toNodeId: data.toUnitId,
+        fromNodeName: `وحدة ${data.fromUnitId}`,
+        toNodeName: `وحدة ${data.toUnitId}`,
+        createdAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
+        createdBy: data.handler,
+        status: 'completed',
+        notes: data.notes
+      };
+      txs.unshift(newTx);
+      saveLocalTransactions(txs);
+      return transformTransferTransaction(newTx);
+    }
   }
 };
 

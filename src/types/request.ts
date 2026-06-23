@@ -25,6 +25,9 @@ export interface OperationsRequest {
   createdBy: string;
   createdAt: string;
 
+  type?: 'transfer' | 'consumption' | 'return' | 'damage' | 'waste' | 'disposal';
+
+
   status:
     | 'pending'
     | 'approved'
