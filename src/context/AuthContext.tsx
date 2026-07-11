@@ -10,6 +10,11 @@ interface AuthContextType {
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
+  hasPermission: (permission: string) => boolean;
+  hasAnyPermission: (permissions: string[]) => boolean;
+  hasAllPermissions: (permissions: string[]) => boolean;
+  hasRole: (role: string | string[]) => boolean;
+  isAdmin: () => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -19,6 +24,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [token, setToken] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
+
+  const hasPermission = (permission: string): boolean => {
+    if (user?.role === 'admin') return true;
+    return user?.permissions?.includes(permission) || false;
+  };
+
+  const hasAnyPermission = (permissions: string[]): boolean => {
+    if (user?.role === 'admin') return true;
+    return permissions.some(perm => user?.permissions?.includes(perm));
+  };
+
+  const hasAllPermissions = (permissions: string[]): boolean => {
+    if (user?.role === 'admin') return true;
+    return permissions.every(perm => user?.permissions?.includes(perm));
+  };
+
+  const hasRole = (role: string | string[]): boolean => {
+    if (!user) return false;
+    if (Array.isArray(role)) {
+      return role.includes(user.role);
+    }
+    return user.role === role;
+  };
+
+  const isAdmin = (): boolean => {
+    return user?.role === 'admin';
+  };
 
   const checkAuth = async () => {
     const storedToken = localStorage.getItem('token');
@@ -109,6 +141,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         logout,
         checkAuth,
+        hasPermission,
+        hasAnyPermission,
+        hasAllPermissions,
+        hasRole,
+        isAdmin,
       }}
     >
       {children}

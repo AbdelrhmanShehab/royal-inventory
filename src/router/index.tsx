@@ -6,6 +6,9 @@ import InventoryPage from "../pages/Inventory/InventoryPage";
 import TransactionsPage from "../pages/Transactions/TransactionsPage";
 import RequestsPage from "../pages/Requests/RequestsPage";
 import UsersPage from "../pages/Users/UsersPage";
+import AlertsPage from "../pages/Alerts/AlertsPage";
+import WarehousesPage from "../pages/Warehouses/WarehousesPage";
+import RolesPermissionsPage from "../pages/RolesPermissions/RolesPermissionsPage";
 import DashboardLayout from "../components/layout/DashboardLayout";
 import LoginPage from "../pages/Login/LoginPage";
 import ProtectedRoute from "../components/auth/ProtectedRoute";
@@ -29,7 +32,11 @@ export const router = createBrowserRouter([
       },
       {
         path: "organization",
-        element: <OrganizationPage />,
+        element: (
+          <ProtectedRoute permission="view_all_nodes">
+            <OrganizationPage />
+          </ProtectedRoute>
+        ),
       },
       {
         path: "inventory",
@@ -45,7 +52,35 @@ export const router = createBrowserRouter([
       },
       {
         path: "users",
-        element: <UsersPage />,
+        element: (
+          <ProtectedRoute permission="manage_users">
+            <UsersPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "alerts",
+        element: (
+          <ProtectedRoute permission="view_reports">
+            <AlertsPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "warehouses",
+        element: (
+          <ProtectedRoute permission="manage_nodes">
+            <WarehousesPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "admin/roles",
+        element: (
+          <ProtectedRoute permission="manage_permissions">
+            <RolesPermissionsPage />
+          </ProtectedRoute>
+        ),
       },
     ],
   },

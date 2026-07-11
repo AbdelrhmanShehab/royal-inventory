@@ -18,6 +18,7 @@ import Badge from '../../components/ui/Badge';
 import Modal from '../../components/ui/Modal';
 import Input from '../../components/ui/Input';
 import Loader from '../../components/ui/Loader';
+import PermissionGate from '../../components/auth/PermissionGate';
 import { hierarchyApi } from '../../api/hierarchy.api';
 import type { StockItem } from '../../types/inventory';
 import { transactionsApi } from '../../api/transactions.api';
@@ -266,10 +267,12 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => navigate('/organization')}>
-            <Building2 size={16} />
-            الهيكل التنظيمي
-          </Button>
+          <PermissionGate permission="view_all_nodes">
+            <Button variant="outline" size="sm" onClick={() => navigate('/organization')}>
+              <Building2 size={16} />
+              الهيكل التنظيمي
+            </Button>
+          </PermissionGate>
           <Button variant="primary" size="sm" onClick={() => navigate('/inventory')}>
             <Package size={16} />
             استعراض المخزون
@@ -379,23 +382,24 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 gap-3">
               {[
                 { title: 'عرض المخزون', desc: 'استعراض مستويات وكميات السلع وتصديرها', onClick: () => navigate('/inventory'), icon: Eye, color: 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100' },
-                { title: 'إنشاء طلب مخزني', desc: 'تقديم طلب صرف، هدر، أو إرجاع للمستودعات', onClick: () => setIsRequestModalOpen(true), icon: PlusCircle, color: 'bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100' },
-                { title: 'نقل بين المخازن', desc: 'نقل كميات بين الأقسام والبارات والمطابخ', onClick: () => setIsTransferModalOpen(true), icon: ArrowLeftRight, color: 'bg-indigo-50 text-indigo-600 border-indigo-100 hover:bg-indigo-100' },
-                { title: 'استعراض الوحدات', desc: 'تتبع الهيكل الإداري والعهدة التشغيلية', onClick: () => navigate('/organization'), icon: Building2, color: 'bg-purple-50 text-purple-600 border-purple-100 hover:bg-purple-100' }
+                { title: 'إنشاء طلب مخزني', desc: 'تقديم طلب صرف، هدر، أو إرجاع للمستودعات', onClick: () => setIsRequestModalOpen(true), icon: PlusCircle, color: 'bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100', permission: 'create_draft' },
+                { title: 'نقل بين المخازن', desc: 'نقل كميات بين الأقسام والبارات والمطابخ', onClick: () => setIsTransferModalOpen(true), icon: ArrowLeftRight, color: 'bg-indigo-50 text-indigo-600 border-indigo-100 hover:bg-indigo-100', permission: 'confirm_transfer' },
+                { title: 'استعراض الوحدات', desc: 'تتبع الهيكل الإداري والعهدة التشغيلية', onClick: () => navigate('/organization'), icon: Building2, color: 'bg-purple-50 text-purple-600 border-purple-100 hover:bg-purple-100', permission: 'view_all_nodes' }
               ].map((act, idx) => (
-                <div
-                  key={idx}
-                  onClick={act.onClick}
-                  className="flex items-center gap-3 p-3 bg-white border border-slate-200/80 rounded-xl hover:border-slate-300 transition-all cursor-pointer group"
-                >
-                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center border transition-all ${act.color}`}>
-                    <act.icon size={16} className="group-hover:scale-105" />
+                <PermissionGate key={idx} permission={act.permission}>
+                  <div
+                    onClick={act.onClick}
+                    className="flex items-center gap-3 p-3 bg-white border border-slate-200/80 rounded-xl hover:border-slate-300 transition-all cursor-pointer group"
+                  >
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center border transition-all ${act.color}`}>
+                      <act.icon size={16} className="group-hover:scale-105" />
+                    </div>
+                    <div className="flex flex-col text-right">
+                      <span className="text-xs font-bold text-slate-800">{act.title}</span>
+                      <span className="text-[10px] text-slate-400 font-medium mt-0.5">{act.desc}</span>
+                    </div>
                   </div>
-                  <div className="flex flex-col text-right">
-                    <span className="text-xs font-bold text-slate-800">{act.title}</span>
-                    <span className="text-[10px] text-slate-400 font-medium mt-0.5">{act.desc}</span>
-                  </div>
-                </div>
+                </PermissionGate>
               ))}
             </div>
           </div>

@@ -1,29 +1,32 @@
 export interface AppUser {
-  user_id: number;
-
+  id: number;
+  user_id?: number;
   username: string;
-
-  full_name_ar: string;
-
+  fullNameAr?: string;
+  full_name_ar?: string;
   role:
     | "admin"
     | "manager"
-    | "operator"
-    | "viewer";
-
-  node_id: number | null;
-
-  is_active: boolean;
-
-  last_login_at: string | null;
+    | "warehouse_manager"
+    | "warehouse_head"
+    | "accountant"
+    | "staff";
+  nodeId?: number | null;
+  node_id?: number | null;
+  nodeIds?: number[];
+  is_active?: boolean;
+  isActive?: boolean;
+  last_login_at?: string | null;
+  permissions?: string[];
 }
 
 export interface User {
   id: string;
   username: string;
-  role: 'admin' | 'manager' | 'operator' | 'viewer';
-  unitId: string;
-  unitName: string;
+  role: 'admin' | 'manager' | 'warehouse_manager' | 'warehouse_head' | 'accountant' | 'staff';
+  unitId?: string;
+  unitName?: string;
   status: 'active' | 'inactive';
-  email: string;
+  email?: string;
+  permissions?: string[];
 }

@@ -6,19 +6,33 @@ import {
   Package, 
   ArrowLeftRight, 
   ClipboardList, 
-  Users 
+  Users,
+  AlertTriangle,
+  Warehouse,
+  Shield
 } from 'lucide-react';
 import { ROUTES } from '../../utils/constants';
+import { useAuth } from '../../context/AuthContext';
 
 export const Sidebar: React.FC = () => {
+  const { hasPermission } = useAuth();
+
   const menuItems = [
     { name: 'لوحة التحكم', path: ROUTES.DASHBOARD, icon: LayoutDashboard },
-    { name: 'الهيكل التنظيمي', path: ROUTES.ORGANIZATION, icon: FolderTree },
+    { name: 'الهيكل التنظيمي', path: ROUTES.ORGANIZATION, icon: FolderTree, permission: 'view_all_nodes' },
     { name: 'المخزون التشغيلي', path: ROUTES.INVENTORY, icon: Package },
     { name: 'التحويلات والحركات', path: ROUTES.TRANSACTIONS, icon: ArrowLeftRight },
     { name: 'الطلبات والعمليات', path: ROUTES.REQUESTS, icon: ClipboardList },
-    { name: 'سجل المستخدمين', path: ROUTES.USERS, icon: Users },
+    { name: 'سجل المستخدمين', path: ROUTES.USERS, icon: Users, permission: 'manage_users' },
+    { name: 'تنبيهات النواقص', path: '/alerts', icon: AlertTriangle, permission: 'view_reports' },
+    { name: 'إدارة المخازن', path: '/warehouses', icon: Warehouse, permission: 'manage_nodes' },
+    { name: 'الأدوار والصلاحيات', path: '/admin/roles', icon: Shield, permission: 'manage_permissions' },
   ];
+
+  const filteredMenuItems = menuItems.filter(item => {
+    if (!item.permission) return true;
+    return hasPermission(item.permission);
+  });
 
   return (
     <aside className="w-[260px] h-full bg-white border-l border-slate-200/80 flex flex-col flex-shrink-0 z-30 select-none">
@@ -35,7 +49,7 @@ export const Sidebar: React.FC = () => {
 
       {/* Navigation List */}
       <nav className="flex-1 px-4 py-6 flex flex-col gap-1 overflow-y-auto">
-        {menuItems.map((item) => (
+        {filteredMenuItems.map((item) => (
           <NavLink
             key={item.path}
             to={item.path}
