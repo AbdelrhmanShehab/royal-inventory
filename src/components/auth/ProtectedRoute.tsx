@@ -9,15 +9,17 @@ interface ProtectedRouteProps {
   roles?: string[];
   permission?: string;
   permissions?: string[];
+  anyPermission?: string[];
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
   children, 
   roles, 
   permission, 
-  permissions 
+  permissions,
+  anyPermission
 }) => {
-  const { isAuthenticated, loading, hasPermission, hasAllPermissions, hasRole } = useAuth();
+  const { isAuthenticated, loading, hasPermission, hasAnyPermission, hasAllPermissions, hasRole } = useAuth();
 
   if (loading) {
     return <Loader fullPage={true} label="جاري التحقق من الصلاحيات..." />;
@@ -34,6 +36,11 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   // Check single permission authorization
   if (permission && !hasPermission(permission)) {
+    return <UnauthorizedPage />;
+  }
+
+  // Check any permission authorization
+  if (anyPermission && anyPermission.length > 0 && !hasAnyPermission(anyPermission)) {
     return <UnauthorizedPage />;
   }
 

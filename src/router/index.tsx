@@ -13,6 +13,14 @@ import DashboardLayout from "../components/layout/DashboardLayout";
 import LoginPage from "../pages/Login/LoginPage";
 import ProtectedRoute from "../components/auth/ProtectedRoute";
 
+// Laundry Pages
+import LaundryDashboard from "../pages/Laundry/LaundryDashboard";
+import ActiveBatches from "../pages/Laundry/ActiveBatches";
+import MachinesPrograms from "../pages/Laundry/MachinesPrograms";
+import RecipesChemicals from "../pages/Laundry/RecipesChemicals";
+import ReportsReconciliation from "../pages/Laundry/ReportsReconciliation";
+import SettingsPage from "../pages/Laundry/SettingsPage";
+
 export const router = createBrowserRouter([
   {
     path: "/login",
@@ -79,6 +87,55 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute permission="manage_permissions">
             <RolesPermissionsPage />
+          </ProtectedRoute>
+        ),
+      },
+      // Laundry module children routes
+      {
+        path: "laundry",
+        element: (
+          <ProtectedRoute anyPermission={["view_laundry", "manage_laundry_operations", "receive_laundry_items", "view_laundry_pos"]}>
+            <LaundryDashboard />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "laundry/batches",
+        element: (
+          <ProtectedRoute anyPermission={["view_laundry", "manage_laundry_operations"]}>
+            <ActiveBatches />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "laundry/machines",
+        element: (
+          <ProtectedRoute anyPermission={["view_laundry", "manage_laundry_operations"]}>
+            <MachinesPrograms />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "laundry/recipes",
+        element: (
+          <ProtectedRoute anyPermission={["view_laundry", "manage_laundry_operations"]}>
+            <RecipesChemicals />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "laundry/reports",
+        element: (
+          <ProtectedRoute anyPermission={["view_laundry", "manage_laundry_operations", "receive_laundry_items", "view_laundry_pos"]}>
+            <ReportsReconciliation />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "laundry/settings",
+        element: (
+          <ProtectedRoute anyPermission={["view_laundry", "manage_laundry_operations"]}>
+            <SettingsPage />
           </ProtectedRoute>
         ),
       },

@@ -12,6 +12,7 @@ import Modal from '../../components/ui/Modal';
 import Input from '../../components/ui/Input';
 import Loader from '../../components/ui/Loader';
 import EmptyState from '../../components/ui/EmptyState';
+import PermissionGate from '../../components/auth/PermissionGate';
 import { requestsApi } from '../../api/requests.api';
 import { hierarchyApi } from '../../api/hierarchy.api';
 import type { OperationsRequest } from '../../types/request';
@@ -230,10 +231,12 @@ export default function RequestsPage() {
             بوابة طلبات التموين والعهدة
           </h1>
           <div className="flex gap-2">
-            <Button variant="primary" size="sm" onClick={() => setIsCreateModalOpen(true)}>
-              <Plus size={14} />
-              إنشاء طلب تموين
-            </Button>
+            <PermissionGate permission="create_draft">
+              <Button variant="primary" size="sm" onClick={() => setIsCreateModalOpen(true)}>
+                <Plus size={14} />
+                إنشاء طلب تموين
+              </Button>
+            </PermissionGate>
           </div>
         </div>
 
@@ -449,53 +452,57 @@ export default function RequestsPage() {
 
             {/* Workflow Action Bar */}
             {selectedReq.status === 'pending' && (
-              <div className="border border-slate-150 rounded-xl p-4 bg-slate-50 flex flex-col gap-4">
-                <span className="text-[10px] font-bold text-slate-500 text-right">معالجة الطلب واعتماده</span>
-                
-                {isApproving ? (
-                  <div className="flex flex-col gap-4">
+              <PermissionGate permission="approve_transfer">
+                <div className="border border-slate-150 rounded-xl p-4 bg-slate-50 flex flex-col gap-4">
+                  <span className="text-[10px] font-bold text-slate-500 text-right">معالجة الطلب واعتماده</span>
+                  
+                  {isApproving ? (
+                    <div className="flex flex-col gap-4">
+                      <Input 
+                        label="مبررات أو مبرر الاعتماد / الرفض" 
+                        placeholder="اكتب ملاحظة توضيحية..." 
+                        value={actionNotes}
+                        onChange={(e) => setActionNotes(e.target.value)}
+                      />
+                      <div className="flex justify-end gap-2">
+                        <Button variant="outline" size="sm" onClick={() => setIsApproving(false)}>تراجع</Button>
+                        <Button variant="danger" size="sm" onClick={handleReject}>رفض الطلب بالكامل</Button>
+                        <Button variant="primary" size="sm" onClick={handleApprove}>تأكيد الاعتماد</Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2 justify-end">
+                      <Button variant="outline" size="sm" onClick={() => { setIsApproving(true); setActionNotes(''); }}>
+                        دراسة واعتماد الطلب
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </PermissionGate>
+            )}
+
+            {selectedReq.status === 'approved' && (
+              <PermissionGate permission="dispatch_transfer">
+                <div className="border border-slate-150 rounded-xl p-4 bg-emerald-50/50 flex flex-col gap-3">
+                  <span className="text-[10px] font-bold text-slate-500 text-right">صرف البضائع والكميات</span>
+                  <p className="text-[10px] text-slate-500 text-right">
+                    عند النقر على صرف، سيتم خصم الكميات المعتمدة من المستودع الرئيسي وتحويلها آلياً إلى مستودع الجهة الطالبة، مع تسجيل حركات تحويل رسمية.
+                  </p>
+                  <div className="flex flex-col gap-3">
                     <Input 
-                      label="مبررات أو مبرر الاعتماد / الرفض" 
-                      placeholder="اكتب ملاحظة توضيحية..." 
+                      label="رقم مستند الصرف أو ملاحظات" 
+                      placeholder="ملاحظات الصرف والتحويل..." 
                       value={actionNotes}
                       onChange={(e) => setActionNotes(e.target.value)}
                     />
                     <div className="flex justify-end gap-2">
-                      <Button variant="outline" size="sm" onClick={() => setIsApproving(false)}>تراجع</Button>
-                      <Button variant="danger" size="sm" onClick={handleReject}>رفض الطلب بالكامل</Button>
-                      <Button variant="primary" size="sm" onClick={handleApprove}>تأكيد الاعتماد</Button>
+                      <Button variant="primary" size="sm" onClick={handleIssue}>
+                        تأكيد الصرف والشحن التلقائي
+                      </Button>
                     </div>
                   </div>
-                ) : (
-                  <div className="flex gap-2 justify-end">
-                    <Button variant="outline" size="sm" onClick={() => { setIsApproving(true); setActionNotes(''); }}>
-                      دراسة واعتماد الطلب
-                    </Button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {selectedReq.status === 'approved' && (
-              <div className="border border-slate-150 rounded-xl p-4 bg-emerald-50/50 flex flex-col gap-3">
-                <span className="text-[10px] font-bold text-slate-500 text-right">صرف البضائع والكميات</span>
-                <p className="text-[10px] text-slate-500 text-right">
-                  عند النقر على صرف، سيتم خصم الكميات المعتمدة من المستودع الرئيسي وتحويلها آلياً إلى مستودع الجهة الطالبة، مع تسجيل حركات تحويل رسمية.
-                </p>
-                <div className="flex flex-col gap-3">
-                  <Input 
-                    label="رقم مستند الصرف أو ملاحظات" 
-                    placeholder="ملاحظات الصرف والتحويل..." 
-                    value={actionNotes}
-                    onChange={(e) => setActionNotes(e.target.value)}
-                  />
-                  <div className="flex justify-end gap-2">
-                    <Button variant="primary" size="sm" onClick={handleIssue}>
-                      تأكيد الصرف والشحن التلقائي
-                    </Button>
-                  </div>
                 </div>
-              </div>
+              </PermissionGate>
             )}
 
             {/* Timeline Events Audit Log */}

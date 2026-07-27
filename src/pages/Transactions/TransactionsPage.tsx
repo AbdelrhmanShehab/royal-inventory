@@ -15,6 +15,7 @@ import Loader from '../../components/ui/Loader';
 import EmptyState from '../../components/ui/EmptyState';
 import Modal from '../../components/ui/Modal';
 import Input from '../../components/ui/Input';
+import PermissionGate from '../../components/auth/PermissionGate';
 import { transactionsApi } from '../../api/transactions.api';
 import { hierarchyApi } from '../../api/hierarchy.api';
 import { requestsApi } from '../../api/requests.api';
@@ -225,14 +226,18 @@ export default function TransactionsPage() {
             تتبع الحركات والتحويلات المخزنية
           </h1>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={handleExport} disabled={filteredTxs.length === 0}>
-              <Download size={14} />
-              تصدير تقرير الحركات
-            </Button>
-            <Button variant="primary" size="sm" onClick={() => setIsRequestModalOpen(true)}>
-              <PlusCircle size={14} />
-              إنشاء طلب مخزني
-            </Button>
+            <PermissionGate permission="view_reports">
+              <Button variant="outline" size="sm" onClick={handleExport} disabled={filteredTxs.length === 0}>
+                <Download size={14} />
+                تصدير تقرير الحركات
+              </Button>
+            </PermissionGate>
+            <PermissionGate permission="create_draft">
+              <Button variant="primary" size="sm" onClick={() => setIsRequestModalOpen(true)}>
+                <PlusCircle size={14} />
+                إنشاء طلب مخزني
+              </Button>
+            </PermissionGate>
           </div>
         </div>
 

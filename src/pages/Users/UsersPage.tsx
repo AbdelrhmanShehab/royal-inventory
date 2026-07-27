@@ -50,7 +50,7 @@ export default function UsersPage() {
 
   // Filter logic
   const filteredUsers = users.filter(user => {
-    const matchesSearch = user.username.includes(searchQuery) || user.email.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = user.username.includes(searchQuery) || (user.email?.toLowerCase() || '').includes(searchQuery.toLowerCase());
     return matchesSearch;
   });
 

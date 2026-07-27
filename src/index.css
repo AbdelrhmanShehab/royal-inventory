@@ -11,6 +11,11 @@
 
   --animate-slide-in-left: slide-in-left 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   --animate-fade-in: fade-in 0.15s ease-out;
+  --animate-spin-slow: spin 8s linear infinite;
+  --animate-slosh: slosh 3s ease-in-out infinite;
+  --animate-bubbles: bubbles 2s ease-in-out infinite;
+  --animate-pipe-flow: pipeFlow 1s linear infinite;
+  --animate-indicator-pulse: indicatorPulse 2s infinite;
 
   @keyframes slide-in-left {
     from { transform: translateX(-100%); }
@@ -19,6 +24,23 @@
   @keyframes fade-in {
     from { opacity: 0; transform: translateY(8px) scale(0.98); }
     to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes slosh {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(-4px) rotate(3deg); }
+  }
+  @keyframes bubbles {
+    0% { transform: translateY(80%) scale(0.5); opacity: 0; }
+    50% { opacity: 0.8; }
+    100% { transform: translateY(-30%) scale(1.2); opacity: 0; }
+  }
+  @keyframes pipeFlow {
+    from { stroke-dashoffset: 20; }
+    to { stroke-dashoffset: 0; }
+  }
+  @keyframes indicatorPulse {
+    0%, 100% { opacity: 1; filter: drop-shadow(0 0 2px rgba(16, 185, 129, 0.6)); }
+    50% { opacity: 0.5; filter: drop-shadow(0 0 6px rgba(16, 185, 129, 0.9)); }
   }
 }
 

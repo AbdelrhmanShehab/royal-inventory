@@ -118,11 +118,11 @@ export const LoginPage: React.FC = () => {
           <span className="tracking-wide opacity-70">Royal Inventory System &copy; 2026</span>
 
           <div className="flex items-center gap-2">
-            <span className="text-white px-3.5 py-2 rounded-full font-medium shadow-sm border border-slate-200/40">
+            <span className="text-white px-4.5 py-4 bg-blue-500 text-[14px]  rounded-full font-bold shadow-sm border border-slate-200/40">
               م\ عبد الرحمن حسام
             </span>
 
-            <span className="text-white px-3.5 py-2   rounded-full font-medium shadow-sm border border-slate-200/40">
+            <span className="text-white px-4.5 py-4 bg-blue-500 text-[14px]  rounded-full font-bold shadow-sm border border-slate-200/40">
               م\ محمد سمير
             </span>
           </div>
