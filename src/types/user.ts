@@ -21,12 +21,36 @@ export interface AppUser {
 }
 
 export interface User {
-  id: string;
+  id: string | number;
   username: string;
+  fullNameAr: string;
   role: 'admin' | 'manager' | 'warehouse_manager' | 'warehouse_head' | 'accountant' | 'staff';
+  nodeId?: number | null;
+  nodeIds?: number[];
+  nodeNameAr?: string;
   unitId?: string;
   unitName?: string;
   status: 'active' | 'inactive';
+  isActive: boolean;
   email?: string;
   permissions?: string[];
+  createdAt?: string;
+}
+
+export interface CreateUserData {
+  username: string;
+  fullNameAr: string;
+  password: string;
+  role: 'admin' | 'manager' | 'warehouse_manager' | 'warehouse_head' | 'accountant' | 'staff';
+  nodeId?: number | null;
+  nodeIds?: number[];
+  isActive?: boolean;
+}
+
+export interface UpdateUserData {
+  fullNameAr: string;
+  role: 'admin' | 'manager' | 'warehouse_manager' | 'warehouse_head' | 'accountant' | 'staff';
+  nodeId?: number | null;
+  nodeIds?: number[];
+  isActive: boolean;
 }

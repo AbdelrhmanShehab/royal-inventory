@@ -18,6 +18,7 @@ import { transactionsApi } from '../../api/transactions.api';
 import type { OrganizationNode } from '../../types/hierarchy';
 import type { TransferTransaction } from '../../types/transaction';
 import { CATEGORIES } from '../../utils/constants';
+import { useWarehouseScope } from '../../hooks/useWarehouseScope';
 
 export default function InventoryPage() {
   const [nodes, setNodes] = useState<OrganizationNode[]>([]);
@@ -57,6 +58,8 @@ export default function InventoryPage() {
     return result;
   };
 
+  const { currentNodeId, isGlobalAdmin, currentNodeName } = useWarehouseScope();
+
   // Load Tree Nodes
   useEffect(() => {
     const loadNodes = async () => {
@@ -64,7 +67,9 @@ export default function InventoryPage() {
         const tree = await hierarchyApi.getTree();
         const flat = flattenNodes(tree);
         setNodes(flat);
-        if (flat.length > 0) {
+        if (!isGlobalAdmin && currentNodeId) {
+          setSelectedNodeId(String(currentNodeId));
+        } else if (flat.length > 0) {
           setSelectedNodeId(flat[0].id);
         }
       } catch (err) {
@@ -74,7 +79,7 @@ export default function InventoryPage() {
       }
     };
     loadNodes();
-  }, []);
+  }, [currentNodeId, isGlobalAdmin]);
 
   // Fetch stock when selectedNodeId changes
   useEffect(() => {
@@ -215,15 +220,21 @@ export default function InventoryPage() {
             {/* Unit SelectorDropdown */}
             <div className="flex items-center gap-2">
               <label className="text-xs font-bold text-slate-600">الوحدة التشغيلية:</label>
-              <select
-                value={selectedNodeId}
-                onChange={(e) => setSelectedNodeId(e.target.value)}
-                className="px-3.5 py-1.5 bg-slate-50 border border-slate-200 text-xs rounded-lg text-slate-700 font-bold focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-              >
-                {nodes.map(n => (
-                  <option key={n.id} value={n.id}>{n.name}</option>
-                ))}
-              </select>
+              {isGlobalAdmin ? (
+                <select
+                  value={selectedNodeId}
+                  onChange={(e) => setSelectedNodeId(e.target.value)}
+                  className="px-3.5 py-1.5 bg-slate-50 border border-slate-200 text-xs rounded-lg text-slate-700 font-bold focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                >
+                  {nodes.map(n => (
+                    <option key={n.id} value={n.id}>{n.name}</option>
+                  ))}
+                </select>
+              ) : (
+                <span className="px-3.5 py-1.5 bg-blue-50 border border-blue-200 text-xs rounded-lg text-blue-700 font-bold shadow-2xs">
+                  🔒 {currentNodeName}
+                </span>
+              )}
             </div>
             
             <Button variant="outline" size="sm" onClick={handleExport} disabled={filteredItems.length === 0}>

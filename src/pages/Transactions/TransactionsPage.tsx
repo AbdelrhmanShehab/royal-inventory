@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
-import { 
-  History, 
-  ArrowUpDown, 
-  ArrowLeftRight, 
+import {
+  History,
+  ArrowUpDown,
   Download,
   PlusCircle,
   CheckCircle2
@@ -10,7 +9,6 @@ import {
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
-import Drawer from '../../components/ui/Drawer';
 import Loader from '../../components/ui/Loader';
 import EmptyState from '../../components/ui/EmptyState';
 import Modal from '../../components/ui/Modal';
@@ -18,7 +16,9 @@ import Input from '../../components/ui/Input';
 import PermissionGate from '../../components/auth/PermissionGate';
 import { transactionsApi } from '../../api/transactions.api';
 import { hierarchyApi } from '../../api/hierarchy.api';
-import { requestsApi } from '../../api/requests.api';
+import { transferApi } from '../../features/transfer/api/transfer.api';
+import CreateTransferDialog from '../../features/transfer/dialogs/CreateTransferDialog';
+import TransferDetailsDialog from '../../features/transfer/dialogs/TransferDetailsDialog';
 import { warehousesApi } from '../../api/warehouses.api';
 import type { TransferTransaction } from '../../types/transaction';
 import type { OrganizationNode } from '../../types/hierarchy';
@@ -106,19 +106,15 @@ export default function TransactionsPage() {
   const handleRequestSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const selectedUnit = warehousesList.find(un => un.id === requestForm.unitId);
-
-      await requestsApi.createRequest({
-        requestingNodeId: Number(requestForm.unitId.replace(/\D/g, '')) || 11,
-        requestingNodeName: selectedUnit ? selectedUnit.name : 'مستودع غير معروف',
-        createdBy: requestForm.creator,
-        type: requestForm.type,
-        items: [
+      await transferApi.createTransferDraft({
+        txnType: requestForm.type as any,
+        fromNodeId: Number(requestForm.unitId.replace(/\D/g, '')) || 11,
+        reason: 'طلب مخزني من صفحة الحركات',
+        lines: [
           {
             itemCode: 'ITEM-' + Date.now(),
-            itemName: requestForm.itemName,
-            unit: requestForm.unit,
-            requestedQty: Number(requestForm.requiredQty)
+            quantity: Number(requestForm.requiredQty),
+            unitCode: requestForm.unit
           }
         ]
       });
@@ -150,13 +146,13 @@ export default function TransactionsPage() {
   // Filter logic
   const filteredTxs = transactions.filter(tx => {
     const matchesType = filterType ? tx.txnType === filterType : true;
-    
+
     const fromName = getNodeName(tx.fromNodeId);
     const toName = getNodeName(tx.toNodeId);
     const matchesUnit = filterUnit ? (
       fromName.includes(filterUnit) || toName.includes(filterUnit)
     ) : true;
-    
+
     const matchesDate = filterDate ? (tx.createdAt || '').startsWith(filterDate) : true;
     const matchesStatus = filterStatus ? tx.status === filterStatus : true;
     return matchesType && matchesUnit && matchesDate && matchesStatus;
@@ -166,8 +162,8 @@ export default function TransactionsPage() {
   const sortedTxs = [...filteredTxs].sort((a, b) => {
     const timeA = a.createdAt || '';
     const timeB = b.createdAt || '';
-    return sortOrder === 'desc' 
-      ? timeB.localeCompare(timeA) 
+    return sortOrder === 'desc'
+      ? timeB.localeCompare(timeA)
       : timeA.localeCompare(timeB);
   });
 
@@ -189,14 +185,14 @@ export default function TransactionsPage() {
   // Export CSV
   const handleExport = () => {
     const headers = ['رقم الحركة,النوع,من,إلى,المرجع,المنشئ,التاريخ,الحالة,ملاحظات\n'];
-    const rows = filteredTxs.map(tx => 
+    const rows = filteredTxs.map(tx =>
       `${tx.txnId},${tx.txnType},${getNodeName(tx.fromNodeId)},${getNodeName(tx.toNodeId)},${tx.referenceNo || ''},${tx.createdBy},${tx.createdAt},${tx.status},${tx.notes || ''}`
     );
     const blob = new Blob(['\uFEFF' + headers.concat(rows.join('\n'))], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `حركات_المخزون_${new Date().toISOString().substring(0,10)}.csv`);
+    link.setAttribute('download', `حركات_المخزون_${new Date().toISOString().substring(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -217,7 +213,7 @@ export default function TransactionsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      
+
       {/* Filters Area */}
       <div className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-xs select-none">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
@@ -273,7 +269,7 @@ export default function TransactionsPage() {
 
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-bold text-slate-500">التاريخ</label>
-            <input 
+            <input
               type="date"
               value={filterDate}
               onChange={(e) => { setFilterDate(e.target.value); setCurrentPage(1); }}
@@ -335,7 +331,7 @@ export default function TransactionsPage() {
                     const typeVar = typeVariants[tx.txnType] || 'neutral';
 
                     return (
-                      <tr 
+                      <tr
                         key={tx.txnId}
                         onClick={() => handleRowClick(tx)}
                         className="hover:bg-slate-50/50 cursor-pointer transition-colors duration-150"
@@ -374,9 +370,9 @@ export default function TransactionsPage() {
                 عرض {indexOfFirstItem + 1} - {Math.min(indexOfLastItem, filteredTxs.length)} من أصل {filteredTxs.length} حركة تشغيلية
               </span>
               <div className="flex gap-1">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  variant="outline"
+                  size="sm"
                   disabled={currentPage === 1}
                   onClick={() => handlePageChange(currentPage - 1)}
                 >
@@ -386,18 +382,17 @@ export default function TransactionsPage() {
                   <button
                     key={idx}
                     onClick={() => handlePageChange(idx + 1)}
-                    className={`w-8 h-8 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      currentPage === idx + 1 
-                        ? 'bg-blue-600 text-white' 
-                        : 'bg-transparent text-slate-500 hover:bg-slate-50'
-                    }`}
+                    className={`w-8 h-8 rounded-lg text-xs font-bold transition-all cursor-pointer ${currentPage === idx + 1
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-transparent text-slate-500 hover:bg-slate-50'
+                      }`}
                   >
                     {idx + 1}
                   </button>
                 ))}
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  variant="outline"
+                  size="sm"
                   disabled={currentPage === totalPages}
                   onClick={() => handlePageChange(currentPage + 1)}
                 >
@@ -409,78 +404,18 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      {/* TRANSACTION DETAILS DRAWER */}
-      <Drawer
-        isOpen={isDrawerOpen}
-        onClose={() => setIsDrawerOpen(false)}
-        title={selectedTx ? `تفاصيل الحركة: #${selectedTx.txnId}` : ''}
-        size="md"
-      >
-        {selectedTx && (
-          <div className="flex flex-col gap-6 select-none">
-            
-            {/* Header overview */}
-            <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 flex justify-between items-center">
-              <div className="flex flex-col text-right">
-                <span className="text-[10px] text-slate-400 font-bold">تاريخ وتوقيت العملية</span>
-                <span className="text-xs font-bold text-slate-800 mt-1">{selectedTx.createdAt}</span>
-              </div>
-              <Badge variant={selectedTx.status === 'completed' ? 'success' : 'neutral'}>
-                {selectedTx.status === 'completed' ? 'عملية مكتملة' : 'معلقة / ملغية'}
-              </Badge>
-            </div>
-
-            {/* Core details */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="border border-slate-100 rounded-xl p-3 flex flex-col text-right">
-                <span className="text-[10px] text-slate-400 font-bold">نوع العملية التشغيلية</span>
-                <span className="text-xs font-bold text-slate-700 mt-1">
-                  {txTypeNames[selectedTx.txnType] || selectedTx.txnType}
-                </span>
-              </div>
-              <div className="border border-slate-100 rounded-xl p-3 flex flex-col text-right">
-                <span className="text-[10px] text-slate-400 font-bold">المسؤول عن الحركة</span>
-                <span className="text-xs font-bold text-slate-700 mt-1">{selectedTx.createdBy}</span>
-              </div>
-            </div>
-
-            {/* Transfer flow units */}
-            <div className="border border-slate-150 rounded-xl p-4 flex flex-col gap-3 bg-slate-50/50">
-              <span className="text-[10px] font-bold text-slate-400 text-right">مسار الحركة التشغيلي</span>
-              <div className="flex justify-between items-center px-4">
-                <div className="flex flex-col text-right">
-                  <span className="text-[9px] text-slate-400 font-semibold">وحدة المصدر</span>
-                  <span className="text-xs font-bold text-slate-700 mt-0.5">{getNodeName(selectedTx.fromNodeId)}</span>
-                </div>
-                <ArrowLeftRight size={16} className="text-slate-300" />
-                <div className="flex flex-col text-left">
-                  <span className="text-[9px] text-slate-400 font-semibold">وحدة الاستلام</span>
-                  <span className="text-xs font-bold text-slate-700 mt-0.5">{getNodeName(selectedTx.toNodeId)}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Reference info */}
-            {selectedTx.referenceNo && (
-              <div className="border border-slate-100 rounded-xl p-4 flex justify-between items-center bg-blue-50/30">
-                <span className="text-xs font-bold text-slate-700">رقم المرجع النظامي</span>
-                <span className="text-sm font-extrabold text-blue-600">
-                  {selectedTx.referenceNo}
-                </span>
-              </div>
-            )}
-
-            {/* Audit Notes */}
-            <div className="flex flex-col gap-2">
-              <span className="text-[10px] font-bold text-slate-400 text-right font-sans">بيان وملاحظات الحركة</span>
-              <div className="border border-slate-100 rounded-xl p-4 bg-slate-50 text-xs text-slate-600 leading-relaxed text-right">
-                {selectedTx.notes || 'لا توجد ملاحظات أو مبررات مسجلة لهذه الحركة.'}
-              </div>
-            </div>
-
-          </div>
-        )}
-      </Drawer>
+      {/* ENTERPRISE ERP TRANSFER DETAILS DIALOG */}
+      <TransferDetailsDialog
+        transferId={selectedTx?.txnId || null}
+        isOpen={isDrawerOpen && !!selectedTx}
+        onClose={() => {
+          setIsDrawerOpen(false);
+          setSelectedTx(null);
+        }}
+        onSuccess={() => {
+          loadData();
+        }}
+      />
 
       <Modal isOpen={isRequestModalOpen} onClose={() => setIsRequestModalOpen(false)} title="تقديم طلب مخزني جديد">
         {formSuccessMessage ? (
@@ -569,6 +504,13 @@ export default function TransactionsPage() {
           </form>
         )}
       </Modal>
+
+      {/* ENTERPRISE ERP TRANSFER DIALOGS */}
+      <CreateTransferDialog
+        isOpen={isRequestModalOpen}
+        onClose={() => setIsRequestModalOpen(false)}
+        onSuccess={() => { loadData(); }}
+      />
 
     </div>
   );

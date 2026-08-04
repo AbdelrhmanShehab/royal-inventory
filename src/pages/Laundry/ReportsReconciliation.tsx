@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { 
-  BarChart3, 
-  RotateCw, 
-  Search, 
-  Calendar, 
-  DollarSign, 
-  ArrowLeftRight, 
+import {
+  BarChart3,
+  RotateCw,
+  Search,
+  Calendar,
+  DollarSign,
+  ArrowLeftRight,
   AlertTriangle,
   Briefcase,
   Flame,
@@ -30,11 +30,11 @@ import Input from '../../components/ui/Input';
 import { laundryApi } from '../../api/laundry.api';
 import { warehousesApi } from '../../api/warehouses.api';
 import { useAuth } from '../../context/AuthContext';
-import type { 
-  LaundryReconciliation, 
-  ProfitabilityRecord, 
-  LaundryTransfer, 
-  LaundryReturn, 
+import type {
+  LaundryReconciliation,
+  ProfitabilityRecord,
+  LaundryTransfer,
+  LaundryReturn,
   LaundryLoss
 } from '../../types/laundry';
 import type { Warehouse } from '../../types/warehouse';
@@ -217,7 +217,7 @@ export default function ReportsReconciliation() {
   }, [transferItemSearch, transferItemInput.itemCode]);
 
   useEffect(() => {
-    const filtered = warehouses.filter(w => 
+    const filtered = warehouses.filter(w =>
       w.name.toLowerCase().includes(warehouseSearch.toLowerCase())
     );
     if (transferForm.fromWarehouseId && !filtered.some(w => String(w.id) === transferForm.fromWarehouseId)) {
@@ -228,7 +228,7 @@ export default function ReportsReconciliation() {
   useEffect(() => {
     const filtered = transfers
       .filter(t => t.status === 'received' && (t.items || []).some(i => i.remainingQty > 0))
-      .filter(t => 
+      .filter(t =>
         String(t.id).includes(transferSearch) ||
         t.fromWarehouseName.toLowerCase().includes(transferSearch.toLowerCase())
       );
@@ -508,7 +508,7 @@ export default function ReportsReconciliation() {
 
   return (
     <div className="flex flex-col gap-6 font-arabic dir-rtl select-none text-right">
-      
+
       {/* Header section */}
       <div className="bg-white border border-slate-200/80 p-6 rounded-2xl shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -520,7 +520,7 @@ export default function ReportsReconciliation() {
             إدارة دورة حياة ومطابقة أرصدة المغسلة (Sent ➔ Processing ➔ Returned ➔ Scrap) ومراقبة فروقات العهدة والتكاليف المالية.
           </p>
         </div>
-        
+
         <div className="flex flex-wrap gap-2 items-center">
           <div className="flex gap-2 items-center bg-slate-50 border border-slate-200/80 p-1.5 rounded-xl">
             <Calendar size={16} className="text-slate-400 mr-2" />
@@ -551,11 +551,10 @@ export default function ReportsReconciliation() {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
-            className={`flex items-center gap-2 px-5 py-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              activeTab === tab.id
+            className={`flex items-center gap-2 px-5 py-3 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === tab.id
                 ? 'bg-blue-50 text-blue-600 shadow-2xs'
                 : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50/70'
-            }`}
+              }`}
           >
             <tab.icon size={15} />
             {tab.label}
@@ -639,12 +638,12 @@ export default function ReportsReconciliation() {
                   </h2>
                   <Card className="border-slate-200/60 shadow-2xs">
                     <Card.Body className="p-4">
-                      
+
                       {/* Visual Joint Pipeline Diagram */}
                       <div className="bg-slate-900 border-2 border-slate-800 rounded-2xl p-6 mb-6 text-white relative shadow-inner">
                         <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.015)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.015)_1px,transparent_1px)] bg-[size:16px_16px] pointer-events-none rounded-2xl" />
                         <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6 text-center">
-                          
+
                           {/* Node 1: Sent */}
                           <div className="flex-1 w-full md:w-auto">
                             <div className="bg-blue-600/90 border border-blue-400 text-white rounded-xl p-4 shadow-lg shadow-blue-500/10">
@@ -743,7 +742,7 @@ export default function ReportsReconciliation() {
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                              {reconciliation.filter(item => 
+                              {reconciliation.filter(item =>
                                 item.itemNameAr.toLowerCase().includes(reconciliationSearch.toLowerCase()) ||
                                 item.itemCode.toLowerCase().includes(reconciliationSearch.toLowerCase())
                               ).length === 0 ? (
@@ -751,7 +750,7 @@ export default function ReportsReconciliation() {
                                   <td colSpan={6} className="p-8 text-center text-slate-400">لا توجد سجلات مطابقة حالياً تلائم البحث.</td>
                                 </tr>
                               ) : (
-                                reconciliation.filter(item => 
+                                reconciliation.filter(item =>
                                   item.itemNameAr.toLowerCase().includes(reconciliationSearch.toLowerCase()) ||
                                   item.itemCode.toLowerCase().includes(reconciliationSearch.toLowerCase())
                                 ).map(item => (
@@ -765,11 +764,10 @@ export default function ReportsReconciliation() {
                                     <td className="px-4 py-3.5 text-center text-emerald-600 font-bold">{item.returnedQty} حبة</td>
                                     <td className="px-4 py-3.5 text-center text-rose-600 font-bold">{item.scrapQty} حبة</td>
                                     <td className="px-4 py-3.5 text-center">
-                                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${
-                                        item.variance === 0
+                                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${item.variance === 0
                                           ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
                                           : 'bg-rose-50 text-rose-600 border-rose-100'
-                                      }`}>
+                                        }`}>
                                         {item.variance === 0 ? 'مطابق' : `${item.variance} حبة`}
                                       </span>
                                     </td>
@@ -803,7 +801,7 @@ export default function ReportsReconciliation() {
 
               {/* Split view: Drafts vs Dispatched */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                
+
                 {/* Drafts List (1 Col) */}
                 <div className="flex flex-col gap-4">
                   <h3 className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
@@ -825,7 +823,7 @@ export default function ReportsReconciliation() {
                             </div>
                             <Badge variant="neutral">مسودة</Badge>
                           </div>
-                          
+
                           <div className="text-[10px] text-slate-505 bg-slate-50 p-2 rounded-lg border border-slate-100 max-h-24 overflow-y-auto">
                             {(t.items || []).map(i => (
                               <div key={i.itemId} className="flex justify-between py-0.5">
@@ -837,9 +835,9 @@ export default function ReportsReconciliation() {
 
                           {canManage && (
                             <div className="flex justify-end gap-1.5">
-                              <Button 
-                                variant="primary" 
-                                size="sm" 
+                              <Button
+                                variant="primary"
+                                size="sm"
                                 onClick={() => handleSendTransfer(t.id)}
                                 isLoading={submitting}
                                 className="w-full justify-center"
@@ -888,16 +886,16 @@ export default function ReportsReconciliation() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {transfers.filter(t => t.status !== 'draft').filter(t => 
-                          String(t.id).includes(transfersSearch) || 
+                        {transfers.filter(t => t.status !== 'draft').filter(t =>
+                          String(t.id).includes(transfersSearch) ||
                           t.fromWarehouseName.toLowerCase().includes(transfersSearch.toLowerCase())
                         ).length === 0 ? (
                           <tr>
                             <td colSpan={6} className="p-8 text-center text-slate-400">لا توجد تحويلات نشطة مسجلة مطابقة للبحث.</td>
                           </tr>
                         ) : (
-                          transfers.filter(t => t.status !== 'draft').filter(t => 
-                            String(t.id).includes(transfersSearch) || 
+                          transfers.filter(t => t.status !== 'draft').filter(t =>
+                            String(t.id).includes(transfersSearch) ||
                             t.fromWarehouseName.toLowerCase().includes(transfersSearch.toLowerCase())
                           ).map(t => {
                             const totalQty = (t.items || []).reduce((sum, i) => sum + i.sentQty, 0);
@@ -985,7 +983,7 @@ export default function ReportsReconciliation() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {returns.filter(r => 
+                    {returns.filter(r =>
                       String(r.id).includes(returnsSearch) ||
                       String(r.transferId).includes(returnsSearch) ||
                       r.creatorUsername.toLowerCase().includes(returnsSearch.toLowerCase())
@@ -994,7 +992,7 @@ export default function ReportsReconciliation() {
                         <td colSpan={6} className="p-8 text-center text-slate-400">لا توجد مستندات مرتجعات مطابقة للبحث.</td>
                       </tr>
                     ) : (
-                      returns.filter(r => 
+                      returns.filter(r =>
                         String(r.id).includes(returnsSearch) ||
                         String(r.transferId).includes(returnsSearch) ||
                         r.creatorUsername.toLowerCase().includes(returnsSearch.toLowerCase())
@@ -1007,13 +1005,13 @@ export default function ReportsReconciliation() {
                           <td className="px-5 py-3.5 text-center">
                             <Badge variant={
                               r.status === 'completed' ? 'success' :
-                              r.status === 'draft' ? 'warning' :
-                              r.status === 'partial_received' ? 'info' : 'danger'
+                                r.status === 'draft' ? 'warning' :
+                                  r.status === 'partial_received' ? 'info' : 'danger'
                             }>
                               {
                                 r.status === 'completed' ? 'مكتمل ومعتمد' :
-                                r.status === 'draft' ? 'مسودة بانتظار التحقق' :
-                                r.status === 'partial_received' ? 'استلام جزئي' : r.status
+                                  r.status === 'draft' ? 'مسودة بانتظار التحقق' :
+                                    r.status === 'partial_received' ? 'استلام جزئي' : r.status
                               }
                             </Badge>
                           </td>
@@ -1055,14 +1053,14 @@ export default function ReportsReconciliation() {
           {/* TAB 4: SCRAP & LOSS LEDGER */}
           {activeTab === 'losses' && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              
+
               {/* Form to record new loss (1 Col) */}
               <div className="flex flex-col gap-4">
                 <h2 className="text-base font-bold text-slate-800">تسجيل هالك وتالف جديد</h2>
                 <Card className="border-slate-200/60 shadow-2xs bg-white">
                   <Card.Body className="p-4">
                     <form onSubmit={handleCreateLossSubmit} className="flex flex-col gap-4">
-                      
+
                       <div className="flex flex-col gap-1.5">
                         <label className="text-xs font-bold text-slate-700">اختر الصنف التالف</label>
                         <select
@@ -1148,7 +1146,7 @@ export default function ReportsReconciliation() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {losses.filter(l => 
+                      {losses.filter(l =>
                         l.itemNameAr.toLowerCase().includes(lossesSearch.toLowerCase()) ||
                         l.itemCode.toLowerCase().includes(lossesSearch.toLowerCase())
                       ).length === 0 ? (
@@ -1156,7 +1154,7 @@ export default function ReportsReconciliation() {
                           <td colSpan={6} className="p-8 text-center text-slate-400">لا توجد عمليات إتلاف مسجلة مطابقة للبحث.</td>
                         </tr>
                       ) : (
-                        losses.filter(l => 
+                        losses.filter(l =>
                           l.itemNameAr.toLowerCase().includes(lossesSearch.toLowerCase()) ||
                           l.itemCode.toLowerCase().includes(lossesSearch.toLowerCase())
                         ).map(l => (
@@ -1167,10 +1165,10 @@ export default function ReportsReconciliation() {
                               <Badge variant="danger">
                                 {
                                   l.reason === 'Torn' ? 'تمزق أقمشة' :
-                                  l.reason === 'Burned' ? 'حرق بالكي' :
-                                  l.reason === 'Shrinkage' ? 'انكماش' :
-                                  l.reason === 'Missing' ? 'مفقود' :
-                                  l.reason === 'Stained' ? 'بقع مستعصية' : 'إتلاف'
+                                    l.reason === 'Burned' ? 'حرق بالكي' :
+                                      l.reason === 'Shrinkage' ? 'انكماش' :
+                                        l.reason === 'Missing' ? 'مفقود' :
+                                          l.reason === 'Stained' ? 'بقع مستعصية' : 'إتلاف'
                                 }
                               </Badge>
                             </td>
@@ -1195,7 +1193,7 @@ export default function ReportsReconciliation() {
       {/* 1. CREATE TRANSFER MODAL */}
       <Modal isOpen={isCreateTransferOpen} onClose={() => setIsCreateTransferOpen(false)} title="إنشاء شحنة تحويل بياضات متسخة" size="md">
         <form onSubmit={handleCreateTransferSubmit} className="flex flex-col gap-4 font-arabic text-right dir-rtl">
-          
+
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-bold text-slate-700">اختر المستودع المرسل (القسم/الجناح)</label>
             <div className="relative mb-1">
@@ -1245,7 +1243,7 @@ export default function ReportsReconciliation() {
           {/* Items Picker Section */}
           <div className="border-t border-slate-100 pt-3 flex flex-col gap-3">
             <span className="text-xs font-bold text-slate-750">إضافة البنود للشحنة:</span>
-            
+
             <div className="flex gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-200 items-end">
               <div className="flex-1 flex flex-col gap-1">
                 <span className="text-[10px] font-bold text-slate-500">اختر الصنف</span>
@@ -1313,8 +1311,8 @@ export default function ReportsReconciliation() {
                     <span className="font-bold text-slate-700">{item.itemNameAr}</span>
                     <div className="flex items-center gap-3">
                       <span className="font-bold text-blue-600">{item.sentQty} حبة</span>
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         onClick={() => handleRemoveTransferItem(item.itemCode)}
                         className="text-rose-500 hover:text-rose-700"
                       >
@@ -1441,7 +1439,7 @@ export default function ReportsReconciliation() {
       {/* 3. CREATE RETURN MODAL */}
       <Modal isOpen={isCreateReturnOpen} onClose={() => setIsCreateReturnOpen(false)} title="إرجاع بياضات نظيفة إلى الفندق" size="lg">
         <form onSubmit={handleCreateReturnSubmit} className="flex flex-col gap-4 font-arabic text-right dir-rtl">
-          
+
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-bold text-slate-700">اختر شحنة التحويل النشطة</label>
             <div className="relative mb-1">
@@ -1475,7 +1473,7 @@ export default function ReportsReconciliation() {
               <option value="">-- اختر الشحنة المعلقة بالمغسلة --</option>
               {transfers
                 .filter(t => t.status === 'received' && (t.items || []).some(i => i.remainingQty > 0))
-                .filter(t => 
+                .filter(t =>
                   String(t.id).includes(transferSearch) ||
                   t.fromWarehouseName.toLowerCase().includes(transferSearch.toLowerCase())
                 )

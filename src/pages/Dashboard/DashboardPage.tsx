@@ -21,17 +21,21 @@ import Loader from '../../components/ui/Loader';
 import PermissionGate from '../../components/auth/PermissionGate';
 import { hierarchyApi } from '../../api/hierarchy.api';
 import type { StockItem } from '../../types/inventory';
-import { transactionsApi } from '../../api/transactions.api';
-import { requestsApi } from '../../api/requests.api';
+import { transferApi } from '../../features/transfer/api/transfer.api';
+import TransferDetailsDialog from '../../features/transfer/dialogs/TransferDetailsDialog';
 import { alertsApi } from '../../api/alerts.api';
 import { warehousesApi } from '../../api/warehouses.api';
+import { transactionsApi } from '../../api/transactions.api';
 import type { OperationsRequest } from '../../types/request';
 import type { OrganizationNode } from '../../types/hierarchy';
 import type { TransferTransaction } from '../../types/transaction';
 import type { Warehouse } from '../../types/warehouse';
 
+import { useWarehouseScope } from '../../hooks/useWarehouseScope';
+
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const { currentNodeId, isGlobalAdmin, currentNodeName } = useWarehouseScope();
 
   // States
   const [flatNodes, setFlatNodes] = useState<OrganizationNode[]>([]);
@@ -43,6 +47,7 @@ export default function DashboardPage() {
   const [activeWarehousesCount, setActiveWarehousesCount] = useState<number>(0);
   const [warehousesList, setWarehousesList] = useState<Warehouse[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedTransferId, setSelectedTransferId] = useState<number | string | null>(null);
 
   // Modals state
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
@@ -103,24 +108,49 @@ export default function DashboardPage() {
       const flat = flattenNodes(tree);
       setFlatNodes(flat);
 
-      // Initialize default selectors if not set
-      if (flat.length > 0) {
-        setRequestForm(prev => prev.unitId ? prev : { ...prev, unitId: flat[0].id });
+      // 2. Fetch stock items (node-scoped or global)
+      let stock: StockItem[] = [];
+      if (!isGlobalAdmin && currentNodeId) {
+        stock = await hierarchyApi.getNodeStock(currentNodeId);
+      } else {
+        stock = await hierarchyApi.getStock();
       }
-
-      // 2. Fetch all stock items to sum operational qty
-      const stock = await hierarchyApi.getStock();
       setTotalStockItems(stock.length);
       const sumQty = stock.reduce((sum, i) => sum + (i.qty_operational || 0), 0);
       setTotalOperationalQty(sumQty);
 
-      // 3. Fetch requests
-      const reqs = await requestsApi.getRequests();
-      setRequests(reqs || []);
+      // 3. Fetch live backend transfers
+      let transfers = await transferApi.getTransfers();
+      if (!isGlobalAdmin && currentNodeId) {
+        transfers = transfers.filter(t => Number(t.fromNodeId) === currentNodeId || Number(t.toNodeId) === currentNodeId);
+      }
 
-      // 4. Fetch transfers
-      const txs = await transactionsApi.getTransfers();
-      setTransactions(txs || []);
+      setRequests(transfers.map(t => ({
+        id: t.id,
+        requestingNodeId: t.fromNodeId,
+        requestingNodeName: t.fromNodeNameAr || 'مستودع',
+        createdBy: String(t.createdByNameAr || t.createdBy || 'مستخدم'),
+        createdAt: t.createdAt,
+        status: t.status as any,
+        type: t.txnType as any,
+        items: []
+      })));
+
+      setTransactions(transfers.map(t => ({
+        txnId: t.id,
+        txnType: t.txnType as any,
+        sku: '',
+        quantity: t.itemCount,
+        unit: 'صنف',
+        fromNodeId: t.fromNodeId,
+        toNodeId: t.toNodeId || 0,
+        fromNodeName: t.fromNodeNameAr || '',
+        toNodeName: t.toNodeNameAr || '',
+        createdAt: t.createdAt,
+        createdBy: String(t.createdByNameAr || t.createdBy || 'مستخدم'),
+        status: t.status,
+        notes: (t as any).reason || undefined
+      })));
 
       // 5. Fetch low stock count
       const alerts = await alertsApi.getAlerts();
@@ -133,10 +163,11 @@ export default function DashboardPage() {
 
       // Default for transfer units using real warehouses
       if (warehouses.length > 0) {
-        setRequestForm(prev => prev.unitId ? prev : { ...prev, unitId: warehouses[0].id });
+        const defaultFrom = !isGlobalAdmin && currentNodeId ? String(currentNodeId) : warehouses[0].id;
+        setRequestForm(prev => prev.unitId ? prev : { ...prev, unitId: defaultFrom });
         setTransferForm(prev => {
-          const fromId = prev.fromUnitId || warehouses[0].id;
-          const toId = prev.toUnitId || (warehouses[1] ? warehouses[1].id : warehouses[0].id);
+          const fromId = defaultFrom;
+          const toId = prev.toUnitId || (warehouses.find(w => String(w.id) !== defaultFrom)?.id || defaultFrom);
           return { ...prev, fromUnitId: fromId, toUnitId: toId };
         });
       }
@@ -150,7 +181,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [currentNodeId, isGlobalAdmin]);
 
   // Fetch available items of source unit in transfer modal
   useEffect(() => {
@@ -179,19 +210,15 @@ export default function DashboardPage() {
   const handleRequestSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const selectedUnit = warehousesList.find(un => un.id === requestForm.unitId);
-
-      await requestsApi.createRequest({
-        requestingNodeId: Number(requestForm.unitId.replace(/\D/g, '')) || 11,
-        requestingNodeName: selectedUnit ? selectedUnit.name : 'مطبخ جاردن الشرقي',
-        createdBy: requestForm.creator,
-        type: requestForm.type,
-        items: [
+      await transferApi.createTransferDraft({
+        txnType: requestForm.type as any,
+        fromNodeId: Number(requestForm.unitId.replace(/\D/g, '')) || 11,
+        reason: 'طلب مخزني من اللوحة',
+        lines: [
           {
             itemCode: 'ITEM-' + Date.now(),
-            itemName: requestForm.itemName,
-            unit: requestForm.unit,
-            requestedQty: Number(requestForm.requiredQty)
+            quantity: Number(requestForm.requiredQty),
+            unitCode: requestForm.unit
           }
         ]
       });
@@ -263,7 +290,7 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-xl lg:text-2xl font-extrabold text-slate-800">نظرة عامة على العمليات والمخزون</h1>
           <p className="text-xs lg:text-sm text-slate-500 mt-1">
-            متابعة فورية لكميات المخزون، التحويلات البينية بين الوحدات، وطلبات التموين التشغيلية المربوطة بـ COMSYS ERP.
+            نطاق المستودع الحالي: <span className="font-bold text-blue-700">{currentNodeName}</span> — متابعة فورية لكميات المخزون والتحويلات البينية المربوطة بـ COMSYS ERP.
           </p>
         </div>
         <div className="flex gap-2">
@@ -338,7 +365,11 @@ export default function DashboardPage() {
                     const toName = flatNodes.find(n => Number(n.id) === tx.toNodeId || n.id === String(tx.toNodeId))?.name || 'مستودع هدف';
 
                     return (
-                      <div key={idx} className="flex items-center justify-between p-4 hover:bg-slate-50 transition-colors">
+                      <div 
+                        key={idx} 
+                        onClick={() => setSelectedTransferId(tx.txnId)} 
+                        className="flex items-center justify-between p-4 hover:bg-slate-50 transition-colors cursor-pointer"
+                      >
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center font-bold text-[10px] text-slate-700">
                             {tx.sku || `#${tx.txnId}`}
@@ -625,6 +656,14 @@ export default function DashboardPage() {
           </form>
         )}
       </Modal>
+
+      {/* Transfer Details Slide-over Dialog */}
+      <TransferDetailsDialog
+        transferId={selectedTransferId}
+        isOpen={!!selectedTransferId}
+        onClose={() => setSelectedTransferId(null)}
+        onSuccess={() => loadData()}
+      />
 
     </div>
   );

@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { Shield, Save, RefreshCw, HelpCircle, Check, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Shield, Save, HelpCircle, Check, AlertCircle, RotateCcw, X } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
-import Loader from '../../components/ui/Loader';
-import { permissionsApi } from '../../api/permissions.api';
+import permissionsApi from '../../api/permissions.api';
 import type { PermissionUpdates } from '../../api/permissions.api';
 
 // Roles mapping
@@ -40,202 +40,290 @@ const PERMISSIONS = [
 ];
 
 export const RolesPermissionsPage: React.FC = () => {
-  const [matrix, setMatrix] = useState<Record<string, Record<string, boolean>>>({});
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [pendingChanges, setPendingChanges] = useState<PermissionUpdates[]>([]);
+  const queryClient = useQueryClient();
 
-  const fetchMatrix = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await permissionsApi.getMatrix();
-      setMatrix(data || {});
-      setPendingChanges([]);
-    } catch (err: any) {
-      console.error(err);
-      setError('فشل في تحميل مصفوفة الصلاحيات من الخادم. تأكد من صلاحيات حسابك.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Page level inline notification states
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Edited Matrix state
+  const [editedMatrix, setEditedMatrix] = useState<Record<string, Record<string, boolean>>>({});
+
+  // 1. Fetch Permissions Matrix Query
+  const { data: serverMatrix = {}, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ['permissions'],
+    queryFn: permissionsApi.getMatrix
+  });
+
+  // Sync editedMatrix when server data loads or resets
   useEffect(() => {
-    fetchMatrix();
-  }, []);
+    if (serverMatrix) {
+      setEditedMatrix(JSON.parse(JSON.stringify(serverMatrix)));
+    }
+  }, [serverMatrix]);
 
-  const handleToggle = (role: string, permKey: string) => {
-    // Prevent removing manage_permissions from admin to avoid lockout
-    if (role === 'admin' && permKey === 'manage_permissions') {
-      setError('أمن النظام: لا يمكن إلغاء صلاحية إدارة الصلاحيات للرئيس العام لتجنب الإغلاق الذاتي.');
-      setTimeout(() => setError(null), 5000);
+  // Compute pending diff updates array
+  const pendingUpdates = useMemo(() => {
+    const updates: PermissionUpdates[] = [];
+    if (!serverMatrix || !editedMatrix) return updates;
+
+    ROLES.forEach(role => {
+      PERMISSIONS.forEach(perm => {
+        const origVal = !!serverMatrix[role.key]?.[perm.key];
+        const editVal = !!editedMatrix[role.key]?.[perm.key];
+        if (origVal !== editVal) {
+          updates.push({
+            role: role.key,
+            permissionKey: perm.key,
+            allowed: editVal
+          });
+        }
+      });
+    });
+
+    return updates;
+  }, [serverMatrix, editedMatrix]);
+
+  const isDirty = pendingUpdates.length > 0;
+
+  // Unsaved changes browser prompt
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = 'لديك تغييرات غير محفوظة في مصفوفة الصلاحيات. هل أنت تأكد من المغادرة؟';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty]);
+
+  // 2. Bulk Save Mutation
+  const saveMutation = useMutation({
+    mutationFn: (updates: PermissionUpdates[]) => permissionsApi.bulkUpdate(updates),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['permissions'] });
+      setErrorMsg(null);
+      setSuccessMsg(`تم حفظ وتطبيق ${res.updated || pendingUpdates.length} صلاحية بنجاح في قاعدة البيانات وتحديث الذاكرة المؤقتة.`);
+      setTimeout(() => setSuccessMsg(null), 6000);
+    },
+    onError: (err: any) => {
+      // Rollback UI matrix state on error
+      if (serverMatrix) {
+        setEditedMatrix(JSON.parse(JSON.stringify(serverMatrix)));
+      }
+      setSuccessMsg(null);
+      const msg = err.response?.data?.message || err.message || 'فشل حفظ التعديلات على الصلاحيات. يرجى التحقق من اتصال الشبكة وصلاحيات الوصول.';
+      setErrorMsg(msg);
+    }
+  });
+
+  // Toggle single permission state
+  const handleToggle = (roleKey: string, permKey: string) => {
+    // Lock admin manage_permissions
+    if (roleKey === 'admin' && permKey === 'manage_permissions') {
+      setErrorMsg('أمن النظام: لا يمكن إلغاء صلاحية إدارة الصلاحيات للمدير العام لتجنب الإغلاق الذاتي.');
       return;
     }
 
-    // Toggle local state
-    const isAllowed = !matrix[role]?.[permKey];
-    setMatrix(prev => ({
-      ...prev,
-      [role]: {
-        ...prev[role],
-        [permKey]: isAllowed
-      }
-    }));
-
-    // Record pending changes for bulk save
-    setPendingChanges(prev => {
-      const filtered = prev.filter(c => !(c.role === role && c.permissionKey === permKey));
-      return [...filtered, { role, permissionKey: permKey, allowed: isAllowed }];
+    setErrorMsg(null);
+    setEditedMatrix(prev => {
+      const currentRoleObj = prev[roleKey] || {};
+      const currentVal = !!currentRoleObj[permKey];
+      return {
+        ...prev,
+        [roleKey]: {
+          ...currentRoleObj,
+          [permKey]: !currentVal
+        }
+      };
     });
   };
 
-  const handleSave = async () => {
-    if (pendingChanges.length === 0) return;
-    setSaving(true);
-    setError(null);
-    setSuccess(null);
-    try {
-      await permissionsApi.bulkUpdate(pendingChanges);
-      setSuccess(`تم تحديث وحفظ عدد ${pendingChanges.length} صلاحية بنجاح. تم تحديث ذاكرة التخزين المؤقت بالخادم.`);
-      setPendingChanges([]);
-      setTimeout(() => setSuccess(null), 4000);
-    } catch (err: any) {
-      console.error(err);
-      setError('فشل حفظ الصلاحيات. يرجى التحقق من اتصال الشبكة وصلاحية وصول المسؤول.');
-    } finally {
-      setSaving(false);
+  // Discard local edits
+  const handleDiscard = () => {
+    if (serverMatrix) {
+      setEditedMatrix(JSON.parse(JSON.stringify(serverMatrix)));
+      setErrorMsg(null);
+      setSuccessMsg('تم إلغاء التعديلات غير المحفوظة وإعادة التعيين للشكل الأصلي.');
+      setTimeout(() => setSuccessMsg(null), 4000);
     }
   };
 
-  const handleReset = () => {
-    fetchMatrix();
+  // Trigger Bulk Save
+  const handleSave = () => {
+    if (pendingUpdates.length === 0) return;
+    saveMutation.mutate(pendingUpdates);
   };
 
-  if (loading) {
-    return (
-      <div className="h-full flex items-center justify-center p-8">
-        <Loader size="lg" label="جاري تحميل مصفوفة الصلاحيات من قاعدة البيانات..." />
-      </div>
-    );
-  }
-
   return (
-    <div className="flex flex-col gap-6 font-arabic dir-rtl select-none">
+    <div className="flex flex-col gap-6 font-arabic select-none" dir="rtl">
+
       {/* Header section */}
       <div className="bg-white border border-slate-200/80 p-6 rounded-2xl shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-xl lg:text-2xl font-extrabold text-slate-800 flex items-center gap-2">
             <Shield size={24} className="text-blue-600 animate-pulse" />
-            إدارة الأدوار وصلاحيات النظام (RBAC)
+            إدارة الأدوار وصلاحيات النظام (RBAC Matrix)
           </h1>
           <p className="text-xs lg:text-sm text-slate-500 mt-1.5 leading-relaxed">
-            التحكم في مستويات الوصول ونطاق الصلاحيات لجميع فئات المستخدمين. التعديلات تنعكس فوراً على مستوى middleware والخادم.
+            التحكم في مستويات الوصول ونطاق الصلاحيات لجميع فئات المستخدمين. التعديلات تنعكس فوراً على قاعدة البيانات وذاكرة الخادم.
           </p>
         </div>
-        <div className="flex gap-2 w-full md:w-auto">
-          <Button variant="outline" size="sm" onClick={handleReset} className="w-full md:w-auto">
-            <RefreshCw size={14} />
-            إعادة تعيين
+        <div className="flex items-center gap-2 w-full md:w-auto">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDiscard}
+            disabled={!isDirty || saveMutation.isPending}
+            className="w-full md:w-auto gap-1.5"
+          >
+            <RotateCcw size={14} />
+            تراجع عن التغييرات
           </Button>
           <Button
             variant="primary"
             size="sm"
             onClick={handleSave}
-            disabled={pendingChanges.length === 0 || saving}
-            className="w-full md:w-auto gap-2"
+            disabled={!isDirty || saveMutation.isPending}
+            className="w-full md:w-auto gap-2 shadow-xs"
           >
             <Save size={14} />
-            حفظ التغييرات ({pendingChanges.length})
+            {saveMutation.isPending ? 'جاري الحفظ...' : `حفظ التغييرات (${pendingUpdates.length})`}
           </Button>
         </div>
       </div>
 
-      {/* Notifications */}
-      {error && (
-        <div className="bg-red-50 border border-red-100 rounded-xl p-4 flex items-center gap-3 text-xs font-semibold text-red-700 animate-fade-in">
-          <AlertCircle size={16} className="text-red-500 flex-shrink-0" />
-          <span>{error}</span>
+      {/* Contextual Inline Success Alert Banner */}
+      {successMsg && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold p-4 rounded-xl flex items-center justify-between animate-fade-in shadow-2xs">
+          <div className="flex items-center gap-2.5">
+            <Check size={18} className="text-emerald-600 flex-shrink-0" />
+            <span>{successMsg}</span>
+          </div>
+          <button onClick={() => setSuccessMsg(null)} className="text-emerald-600 hover:text-emerald-900 cursor-pointer">
+            <X size={16} />
+          </button>
         </div>
       )}
-      {success && (
-        <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 flex items-center gap-3 text-xs font-semibold text-emerald-700 animate-fade-in">
-          <Check size={16} className="text-emerald-500 flex-shrink-0" />
-          <span>{success}</span>
+
+      {/* Contextual Inline Error Alert Banner */}
+      {(errorMsg || isError) && (
+        <div className="bg-red-50 border border-red-200 text-red-800 text-xs font-semibold p-4 rounded-xl flex items-center justify-between animate-fade-in shadow-2xs">
+          <div className="flex items-center gap-2.5">
+            <AlertCircle size={18} className="text-red-600 flex-shrink-0" />
+            <span>{errorMsg || (error instanceof Error ? error.message : 'فشل في تحميل مصفوفة الصلاحيات من الخادم.')}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {isError && (
+              <Button variant="outline" size="sm" onClick={() => refetch()} className="text-xs">
+                إعادة المحاولة
+              </Button>
+            )}
+            <button onClick={() => setErrorMsg(null)} className="text-red-600 hover:text-red-900 cursor-pointer">
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Dirty state alert prompt */}
+      {isDirty && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between gap-3 text-xs font-semibold text-amber-800 animate-fade-in">
+          <div className="flex items-center gap-2">
+            <AlertCircle size={16} className="text-amber-600 flex-shrink-0" />
+            <span>لديك عدد {pendingUpdates.length} تغييرات غير محفوظة في جدول الصلاحيات. اضغط "حفظ التغييرات" للاعتماد.</span>
+          </div>
+          <button onClick={handleDiscard} className="underline text-amber-900 hover:text-amber-700 text-xs cursor-pointer font-bold">
+            إلغاء التغييرات
+          </button>
         </div>
       )}
 
       {/* Main Matrix Table */}
-      <Card className="border-slate-200/80 overflow-hidden shadow-xs">
-        <Card.Body className="p-0">
-          <div className="w-full overflow-x-auto">
-            <table className="w-full text-right border-collapse">
-              <thead className="bg-slate-50/75 border-b border-slate-100 sticky top-0 z-10">
-                <tr>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 min-w-[280px]">الصلاحية / الوظيفة التشغيلية</th>
-                  {ROLES.map(role => (
-                    <th key={role.key} className="px-4 py-4 text-center text-xs font-bold text-slate-700 border-r border-slate-100 min-w-[120px]">
-                      <div className="flex flex-col items-center">
-                        <span>{role.label}</span>
-                        <span className="text-[9px] text-slate-400 font-normal mt-0.5">{role.key}</span>
-                      </div>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {PERMISSIONS.map((perm) => (
-                  <tr key={perm.key} className="hover:bg-slate-50/40 transition-colors duration-150 group">
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col">
-                        <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                          {perm.label}
-                          <div className="relative group/tooltip cursor-pointer">
-                            <HelpCircle size={13} className="text-slate-350 hover:text-slate-500" />
-                            <span className="absolute right-0 bottom-full mb-1.5 w-64 bg-slate-800 text-white text-[10px] p-2.5 rounded-lg opacity-0 pointer-events-none group-hover/tooltip:opacity-100 transition-opacity duration-200 z-55 text-right font-normal shadow-lg leading-relaxed">
-                              {perm.desc}
-                            </span>
-                          </div>
-                        </span>
-                        <span className="text-[10px] text-slate-450 mt-1 font-semibold">{perm.key}</span>
-                      </div>
-                    </td>
-                    {ROLES.map((role) => {
-                      const isChecked = !!matrix[role.key]?.[perm.key];
-                      const isPending = pendingChanges.some(c => c.role === role.key && c.permissionKey === perm.key);
-
-                      return (
-                        <td key={role.key} className="px-4 py-4 text-center border-r border-slate-100">
-                          <label className="inline-flex items-center justify-center cursor-pointer select-none">
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => handleToggle(role.key, perm.key)}
-                              className="sr-only peer"
-                            />
-                            <div className={`
-                              w-9 h-5 bg-slate-200 rounded-full peer 
-                              peer-focus:ring-1 peer-focus:ring-blue-300 
-                              peer-checked:after:-translate-x-full 
-                              peer-checked:after:border-white after:content-[''] 
-                              after:absolute after:top-0.5 after:right-[2px] 
-                              after:bg-white after:border-slate-300 after:border 
-                              after:rounded-full after:h-4 after:w-4 after:transition-all 
-                              peer-checked:bg-blue-600 relative
-                              ${isPending ? 'ring-2 ring-amber-400' : ''}
-                            `}></div>
-                          </label>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {isLoading ? (
+        <Card className="border-slate-200/80 p-6 shadow-xs">
+          <div className="space-y-4 animate-pulse">
+            <div className="h-10 bg-slate-100 rounded-lg w-full"></div>
+            {[1, 2, 3, 4, 6, 7].map((i) => (
+              <div key={i} className="h-12 bg-slate-50 rounded-lg w-full"></div>
+            ))}
           </div>
-        </Card.Body>
-      </Card>
+        </Card>
+      ) : (
+        <Card className="border-slate-200/80 overflow-hidden shadow-xs">
+          <Card.Body className="p-0">
+            <div className="w-full overflow-x-auto">
+              <table className="w-full text-right border-collapse">
+                <thead className="bg-slate-50/80 border-b border-slate-100 sticky top-0 z-10">
+                  <tr>
+                    <th className="px-6 py-4 text-xs font-bold text-slate-500 min-w-[280px]">الصلاحية / الوظيفة التشغيلية</th>
+                    {ROLES.map(role => (
+                      <th key={role.key} className="px-4 py-4 text-center text-xs font-bold text-slate-700 border-r border-slate-100 min-w-[120px]">
+                        <div className="flex flex-col items-center">
+                          <span>{role.label}</span>
+                          <span className="text-[9px] text-slate-400 font-normal mt-0.5">{role.key}</span>
+                        </div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {PERMISSIONS.map((perm) => (
+                    <tr key={perm.key} className="hover:bg-slate-50/40 transition-colors duration-150 group">
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                            {perm.label}
+                            <div className="relative group/tooltip cursor-pointer">
+                              <HelpCircle size={13} className="text-slate-350 hover:text-slate-500" />
+                              <span className="absolute right-0 bottom-full mb-1.5 w-64 bg-slate-800 text-white text-[10px] p-2.5 rounded-lg opacity-0 pointer-events-none group-hover/tooltip:opacity-100 transition-opacity duration-200 z-55 text-right font-normal shadow-lg leading-relaxed">
+                                {perm.desc}
+                              </span>
+                            </div>
+                          </span>
+                          <span className="text-[10px] text-slate-400 mt-1 font-mono font-semibold">{perm.key}</span>
+                        </div>
+                      </td>
+                      {ROLES.map((role) => {
+                        const isChecked = !!editedMatrix[role.key]?.[perm.key];
+                        const origVal = !!serverMatrix[role.key]?.[perm.key];
+                        const isModified = isChecked !== origVal;
+
+                        return (
+                          <td key={role.key} className={`px-4 py-4 text-center border-r border-slate-100 ${isModified ? 'bg-amber-50/40' : ''}`}>
+                            <label className="inline-flex items-center justify-center cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                disabled={saveMutation.isPending}
+                                onChange={() => handleToggle(role.key, perm.key)}
+                                className="sr-only peer"
+                              />
+                              <div className={`
+                                w-9 h-5 bg-slate-200 rounded-full peer 
+                                peer-focus:ring-1 peer-focus:ring-blue-300 
+                                peer-checked:after:-translate-x-full 
+                                peer-checked:after:border-white after:content-[''] 
+                                after:absolute after:top-0.5 after:right-[2px] 
+                                after:bg-white after:border-slate-300 after:border 
+                                after:rounded-full after:h-4 after:w-4 after:transition-all 
+                                peer-checked:bg-blue-600 relative transition-colors duration-200
+                                ${isModified ? 'ring-2 ring-amber-400' : ''}
+                              `}></div>
+                            </label>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card.Body>
+        </Card>
+      )}
 
       {/* Role Explanations Section */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
@@ -246,12 +334,13 @@ export const RolesPermissionsPage: React.FC = () => {
             </div>
             <div className="flex flex-col text-right">
               <span className="text-xs font-bold text-slate-800">{role.label}</span>
-              <span className="text-[10px] text-slate-400 font-semibold mt-0.5">{role.key}</span>
+              <span className="text-[10px] text-slate-400 font-mono font-semibold mt-0.5">{role.key}</span>
               <p className="text-[10px] text-slate-500 font-normal mt-2 leading-relaxed">{role.desc}</p>
             </div>
           </div>
         ))}
       </div>
+
     </div>
   );
 };

@@ -4,7 +4,7 @@ import DashboardPage from "../pages/Dashboard/DashboardPage";
 import OrganizationPage from "../pages/Organization/OrganizationPage";
 import InventoryPage from "../pages/Inventory/InventoryPage";
 import TransactionsPage from "../pages/Transactions/TransactionsPage";
-import RequestsPage from "../pages/Requests/RequestsPage";
+import TransferPage from "../features/transfer/pages/TransferPage";
 import UsersPage from "../pages/Users/UsersPage";
 import AlertsPage from "../pages/Alerts/AlertsPage";
 import WarehousesPage from "../pages/Warehouses/WarehousesPage";
@@ -56,7 +56,15 @@ export const router = createBrowserRouter([
       },
       {
         path: "requests",
-        element: <RequestsPage />,
+        element: <TransferPage />,
+      },
+      {
+        path: "transfers/incoming",
+        element: <TransferPage defaultTab="incoming" />,
+      },
+      {
+        path: "transfers/outgoing",
+        element: <TransferPage defaultTab="outgoing" />,
       },
       {
         path: "users",

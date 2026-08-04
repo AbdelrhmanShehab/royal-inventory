@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import authApi from '../api/auth.api';
 import type { AppUser } from '../types/user';
+import { isTokenExpired } from '../utils/verification';
+import { queryClient } from '../providers/QueryProvider';
 
 interface AuthContextType {
   user: AppUser | null;
@@ -55,22 +57,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const checkAuth = async () => {
     const storedToken = localStorage.getItem('token');
 
-    if (!storedToken) {
+    if (!storedToken || isTokenExpired(storedToken)) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
       setUser(null);
       setToken(null);
       setIsAuthenticated(false);
       setLoading(false);
+      queryClient.clear();
       return;
     }
 
     try {
       // Call GET /auth/me to restore session
       const userData = await authApi.getMe();
-      
+
       setUser(userData);
       setToken(storedToken);
       setIsAuthenticated(true);
-      
+
       // Update local storage user just in case details changed
       localStorage.setItem('user', JSON.stringify(userData));
     } catch (error) {
@@ -81,31 +86,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(null);
       setToken(null);
       setIsAuthenticated(false);
+      queryClient.clear();
     } finally {
       setLoading(false);
     }
   };
 
   const login = async (username: string, password: string) => {
-    setLoading(true);
     try {
+      queryClient.clear();
       const response = await authApi.login({ username, password });
-      
+
       // Based on axios interceptor, the response is response.data.data
       // which has accessToken and user
       const { accessToken, user: loggedUser } = response;
-      
+
       localStorage.setItem('token', accessToken);
       localStorage.setItem('user', JSON.stringify(loggedUser));
-      
+
       setToken(accessToken);
       setUser(loggedUser);
       setIsAuthenticated(true);
     } catch (error) {
       // Re-throw so page can display the error
       throw error;
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -124,11 +128,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setToken(null);
       setIsAuthenticated(false);
       setLoading(false);
+      queryClient.clear();
     }
   };
 
   useEffect(() => {
     checkAuth();
+
+    const handleUnauthorized = () => {
+      setUser(null);
+      setToken(null);
+      setIsAuthenticated(false);
+    };
+
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+    return () => {
+      window.removeEventListener('auth:unauthorized', handleUnauthorized);
+    };
   }, []);
 
   return (

@@ -14,7 +14,9 @@ import {
   Activity,
   FlaskConical,
   BarChart3,
-  Settings
+  Settings,
+  ArrowDownLeft,
+  ArrowUpRight
 } from 'lucide-react';
 import { ROUTES } from '../../utils/constants';
 import { useAuth } from '../../context/AuthContext';
@@ -26,13 +28,15 @@ export const Sidebar: React.FC = () => {
 
   const warehouseMenuItems = [
     { name: 'لوحة التحكم', path: ROUTES.DASHBOARD, icon: LayoutDashboard },
-    { name: 'الهيكل التنظيمي', path: ROUTES.ORGANIZATION, icon: FolderTree, permission: 'view_all_nodes' },
     { name: 'المخزون التشغيلي', path: ROUTES.INVENTORY, icon: Package },
-    { name: 'التحويلات والحركات', path: ROUTES.TRANSACTIONS, icon: ArrowLeftRight },
-    { name: 'الطلبات والعمليات', path: ROUTES.REQUESTS, icon: ClipboardList },
+    { name: 'التحويلات الواردة', path: '/transfers/incoming', icon: ArrowDownLeft },
+    { name: 'التحويلات الصادرة', path: '/transfers/outgoing', icon: ArrowUpRight },
+    { name: 'سجل الحركات الشامل', path: ROUTES.TRANSACTIONS, icon: ArrowLeftRight },
+    { name: 'طلبات التموين والعهدة', path: ROUTES.REQUESTS, icon: ClipboardList },
+    { name: 'تقارير ونواقص المستودع', path: '/alerts', icon: AlertTriangle, permission: 'view_reports' },
+    { name: 'الهيكل التنظيمي', path: ROUTES.ORGANIZATION, icon: FolderTree, permission: 'view_all_nodes' },
+    { name: 'إدارة جميع المستودعات', path: '/warehouses', icon: Warehouse, permission: 'manage_nodes' },
     { name: 'سجل المستخدمين', path: ROUTES.USERS, icon: Users, permission: 'manage_users' },
-    { name: 'تنبيهات النواقص', path: '/alerts', icon: AlertTriangle, permission: 'view_reports' },
-    { name: 'إدارة المخازن', path: '/warehouses', icon: Warehouse, permission: 'manage_nodes' },
     { name: 'الأدوار والصلاحيات', path: '/admin/roles', icon: Shield, permission: 'manage_permissions' },
   ];
 
@@ -119,11 +123,10 @@ export const Sidebar: React.FC = () => {
       {/* Bottom info */}
       <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex flex-col gap-1 text-right">
         <span className="text-[10px] text-slate-400 font-bold">بوابة المستودعات والمنافذ v4.0</span>
-        <span className="text-[9px] text-slate-300 font-semibold">متصل مع COMSYS ERP</span>
+        <span className="text-[9px] text-slate-300 font-semibold">عزل تلقائي للمستودع (Global Isolation)</span>
       </div>
     </aside>
   );
 };
 
 export default Sidebar;
-

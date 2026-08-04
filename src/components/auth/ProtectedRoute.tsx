@@ -1,8 +1,9 @@
 import React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import Loader from '../ui/Loader';
 import UnauthorizedPage from '../../pages/Unauthorized/UnauthorizedPage';
+import { isTokenExpired } from '../../utils/verification';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -19,14 +20,27 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   permissions,
   anyPermission
 }) => {
-  const { isAuthenticated, loading, hasPermission, hasAnyPermission, hasAllPermissions, hasRole } = useAuth();
+  const { user, isAuthenticated, loading, hasPermission, hasAnyPermission, hasAllPermissions, hasRole, isAdmin } = useAuth();
+  const location = useLocation();
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
   if (loading) {
     return <Loader fullPage={true} label="جاري التحقق من الصلاحيات..." />;
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || isTokenExpired(token)) {
     return <Navigate to="/login" replace />;
+  }
+
+  // REQUIREMENT 17: Route Protection for URL parameter tampering
+  const searchParams = new URLSearchParams(location.search);
+  const requestedNodeId = searchParams.get('nodeId') || searchParams.get('fromNodeId') || searchParams.get('unitId');
+
+  if (requestedNodeId && !isAdmin()) {
+    const userNodeId = user?.nodeId ?? user?.node_id;
+    if (userNodeId && Number(requestedNodeId) !== Number(userNodeId)) {
+      return <UnauthorizedPage />;
+    }
   }
 
   // Check roles authorization
