@@ -20,13 +20,16 @@ export interface StockItem {
   category?: string;
   unit?: string;
 
-  qty_operational: number;
-  qty_received: number;
-  qty_consumed: number;
-  qty_wasted: number;
+  qty_operational: number; // الرصيد الفعلي / التشغيلي المتاح
+  qty_received: number;    // إجمالي المستلم (مستلم خارجي + تحويل داخلي وارد)
+  qty_transfers: number;   // تحويلات (محول لمستودعات أخرى)
+  qty_laundry: number;     // مغسلة (قيد الغسيل حالياً بالمغسلة)
+  qty_consumed: number;    // استهلاك تشغيلي
+  qty_returned: number;    // مرتجع للمخزن الرئيسي
+  qty_wasted: number;      // تالف / هدر / استبعاد
 
   avg_cost?: number;
   total_value?: number;
   
-  reorder_level?: number; // Optional reorder level threshold for dynamic low stock
+  reorder_level?: number; // حد التنبيه / الأمان
 }

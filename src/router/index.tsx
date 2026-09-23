@@ -59,6 +59,10 @@ export const router = createBrowserRouter([
         element: <TransferPage />,
       },
       {
+        path: "transfers",
+        element: <TransferPage />,
+      },
+      {
         path: "transfers/incoming",
         element: <TransferPage defaultTab="incoming" />,
       },

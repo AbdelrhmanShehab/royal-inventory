@@ -2,10 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Search, Loader2, Package, Check } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { masterDataApi } from '../../api/masterData.api';
+import { hierarchyApi } from '../../api/hierarchy.api';
 import type { MasterItem } from '../../types/transfer';
 
 interface AsyncItemSelectorProps {
   value?: string; // itemCode
+  nodeId?: number | string | null;
   onSelect: (item: MasterItem) => void;
   placeholder?: string;
   disabled?: boolean;
@@ -13,8 +15,9 @@ interface AsyncItemSelectorProps {
 
 export const AsyncItemSelector: React.FC<AsyncItemSelectorProps> = ({
   value,
+  nodeId,
   onSelect,
-  placeholder = 'ابحث برقم الصنف أو الاسم بالعربي/الإنجليزي...',
+  placeholder,
   disabled = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -23,11 +26,40 @@ export const AsyncItemSelector: React.FC<AsyncItemSelectorProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch all master items
+  const effectivePlaceholder = placeholder || (nodeId !== undefined ? (nodeId ? 'ابحث برقم الصنف أو الاسم بالعربي/الإنجليزي...' : 'يرجى اختيار مستودع المصدر أولاً لعرض الأصناف المتوفرة به...') : 'ابحث برقم الصنف أو الاسم بالعربي/الإنجليزي...');
+
+  // Fetch node-specific stock (only positive available quantity) if nodeId is provided; otherwise fetch all master catalog items
   const { data: items = [], isLoading } = useQuery({
-    queryKey: ['master-data-items'],
-    queryFn: () => masterDataApi.getItems(),
-    staleTime: 5 * 60 * 1000 // Cache for 5 mins
+    queryKey: nodeId !== undefined ? ['node-stock-items-ui', nodeId] : ['master-data-items'],
+    queryFn: async (): Promise<MasterItem[]> => {
+      if (nodeId !== undefined) {
+        if (!nodeId) return [];
+        try {
+          const stock = await hierarchyApi.getNodeStock(nodeId);
+          if (stock && stock.length > 0) {
+            // Strictly exclude any item with stock <= 0
+            const validStock = stock.filter(s => (s.qty_operational || 0) > 0);
+            return validStock.map(s => ({
+              id: s.item_code,
+              itemCode: s.item_code,
+              itemNameAr: s.item_name_ar || s.item_code,
+              itemNameEn: s.item_name_en,
+              categoryCode: s.category,
+              unitCode: s.unit || 'حبة',
+              unitNameAr: s.unit || 'حبة',
+              avgCost: s.avg_cost || 0,
+              availableQty: Number(s.qty_operational || 0)
+            }));
+          }
+          return [];
+        } catch (err) {
+          console.warn('Could not load node stock for ui selector:', err);
+          return [];
+        }
+      }
+      return masterDataApi.getItems();
+    },
+    staleTime: 30 * 1000
   });
 
   // Find currently selected item object if value is set
@@ -92,11 +124,11 @@ export const AsyncItemSelector: React.FC<AsyncItemSelectorProps> = ({
         <input
           ref={inputRef}
           type="text"
-          disabled={disabled}
-          value={isOpen ? searchTerm : (selectedItem ? `${selectedItem.itemCode} - ${selectedItem.itemNameAr}` : '')}
-          placeholder={placeholder}
+          disabled={disabled || (nodeId !== undefined && !nodeId)}
+          value={isOpen ? searchTerm : (selectedItem ? `${selectedItem.itemCode} - ${selectedItem.itemNameAr}${selectedItem.availableQty !== undefined ? ` (متاح: ${selectedItem.availableQty})` : ''}` : '')}
+          placeholder={effectivePlaceholder}
           onFocus={() => {
-            if (!disabled) {
+            if (!disabled && (nodeId === undefined || nodeId)) {
               setIsOpen(true);
               setSearchTerm('');
             }
@@ -107,7 +139,7 @@ export const AsyncItemSelector: React.FC<AsyncItemSelectorProps> = ({
             if (!isOpen) setIsOpen(true);
           }}
           onKeyDown={handleKeyDown}
-          className="w-full pr-9 pl-8 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all disabled:opacity-50"
+          className="w-full pr-9 pl-8 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all disabled:opacity-50 disabled:bg-slate-50 disabled:cursor-not-allowed"
         />
         <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
           {isLoading ? <Loader2 size={15} className="animate-spin text-blue-500" /> : <Search size={15} />}
@@ -125,7 +157,13 @@ export const AsyncItemSelector: React.FC<AsyncItemSelectorProps> = ({
           {isLoading ? (
             <div className="p-4 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
               <Loader2 size={16} className="animate-spin text-blue-600" />
-              جاري جلب قائمة الأصناف من الخادم...
+              جاري جلب قائمة الأصناف المتوفرة...
+            </div>
+          ) : items.length === 0 ? (
+            <div className="p-4 text-center text-xs text-amber-700 bg-amber-50/60 font-medium">
+              {nodeId !== undefined 
+                ? (nodeId ? '⚠️ لا توجد أصناف ذات رصيد متاح (> 0) في هذا المستودع حالياً' : 'يرجى اختيار مستودع المصدر أولاً لعرض الأصناف المتوفرة به') 
+                : 'لا توجد أصناف مسجلة في النظام'}
             </div>
           ) : filteredItems.length === 0 ? (
             <div className="p-4 text-center text-xs text-slate-400">
@@ -138,7 +176,7 @@ export const AsyncItemSelector: React.FC<AsyncItemSelectorProps> = ({
 
               return (
                 <div
-                  key={item.itemCode}
+                  key={`${item.itemCode}-${idx}`}
                   onClick={() => handleSelectItem(item)}
                   onMouseEnter={() => setHighlightedIndex(idx)}
                   className={`p-3 text-xs cursor-pointer flex items-center justify-between transition-colors ${
@@ -146,7 +184,7 @@ export const AsyncItemSelector: React.FC<AsyncItemSelectorProps> = ({
                   } ${isSelected ? 'font-bold bg-blue-50/50' : ''}`}
                 >
                   <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 font-mono text-[10px] font-bold">
+                    <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100 flex items-center justify-center font-mono text-[10px] font-bold shrink-0">
                       <Package size={14} />
                     </div>
                     <div className="flex flex-col">
@@ -154,7 +192,12 @@ export const AsyncItemSelector: React.FC<AsyncItemSelectorProps> = ({
                       <span className="text-[10px] font-mono text-slate-400">كود: {item.itemCode} {item.itemNameEn ? `| ${item.itemNameEn}` : ''}</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 text-left">
+                  <div className="flex items-center gap-2 text-left shrink-0">
+                    {item.availableQty !== undefined && (
+                      <span className="px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
+                        المتوفر: {item.availableQty} {item.unitNameAr || item.unitCode || 'وحدة'}
+                      </span>
+                    )}
                     <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] font-semibold">
                       {item.unitNameAr || item.unitCode || 'وحدة'}
                     </span>

@@ -99,7 +99,7 @@ export interface LaundryTransfer {
   id: number;
   fromWarehouseId: number;
   fromWarehouseName: string;
-  status: 'draft' | 'pending' | 'dispatched' | 'received' | 'cancelled';
+  status: 'draft' | 'pending' | 'dispatched' | 'sent' | 'received' | 'partially_received' | 'rejected' | 'cancelled';
   notes: string | null;
   createdBy: number;
   creatorUsername: string;

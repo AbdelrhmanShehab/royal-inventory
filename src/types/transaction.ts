@@ -4,6 +4,7 @@ export interface TransactionHeader {
   txn_type:
     | "consumption"
     | "internal_transfer"
+    | "laundry"
     | "return"
     | "damage"
     | "waste"

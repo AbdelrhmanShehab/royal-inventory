@@ -1,5 +1,6 @@
 export type TransferType = 
   | 'internal_transfer' 
+  | 'laundry'
   | 'consumption' 
   | 'return' 
   | 'damage' 
@@ -38,6 +39,7 @@ export interface MasterItem {
   avgCost?: number;
   categoryName?: string;
   categoryCode?: string;
+  availableQty?: number;
 }
 
 export interface TransferLine {
@@ -108,6 +110,7 @@ export interface CreateTransferPayload {
   notes?: string;
   reason?: string;
   lines: CreateTransferLinePayload[];
+  submitForApproval?: boolean;
 }
 
 export interface TransferFilterParams {

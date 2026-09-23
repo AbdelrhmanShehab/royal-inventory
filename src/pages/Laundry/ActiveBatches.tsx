@@ -951,8 +951,8 @@ export default function ActiveBatches() {
                         id="wizard-linens-picker"
                         className="px-2 py-1.5 bg-white border border-slate-200 rounded text-xs"
                       >
-                        {STANDARD_LINENS.map(i => (
-                          <option key={i.itemCode} value={i.itemCode}>{i.itemNameAr}</option>
+                        {STANDARD_LINENS.map((i, idx) => (
+                          <option key={`${i.itemCode}-${idx}`} value={i.itemCode}>{i.itemNameAr}</option>
                         ))}
                       </select>
                     </div>

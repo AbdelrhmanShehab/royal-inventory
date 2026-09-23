@@ -27,6 +27,7 @@ export const useCreateTransfer = () => {
     mutationFn: (payload: CreateTransferPayload) => transferApi.createTransferDraft(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: transferKeys.all });
+      queryClient.invalidateQueries({ queryKey: ['stock'] });
     }
   });
 };
@@ -37,6 +38,7 @@ export const useSubmitTransfer = (id: number | string) => {
     mutationFn: () => transferApi.submitForApproval(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: transferKeys.all });
+      queryClient.invalidateQueries({ queryKey: ['stock'] });
     }
   });
 };
@@ -47,6 +49,7 @@ export const useApproveTransfer = (id: number | string) => {
     mutationFn: () => transferApi.approveTransfer(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: transferKeys.all });
+      queryClient.invalidateQueries({ queryKey: ['stock'] });
     }
   });
 };
@@ -57,6 +60,7 @@ export const useDispatchTransfer = (id: number | string) => {
     mutationFn: () => transferApi.dispatchTransfer(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: transferKeys.all });
+      queryClient.invalidateQueries({ queryKey: ['stock'] });
     }
   });
 };
@@ -67,6 +71,7 @@ export const useReceiveTransfer = (id: number | string) => {
     mutationFn: () => transferApi.receiveTransfer(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: transferKeys.all });
+      queryClient.invalidateQueries({ queryKey: ['stock'] });
     }
   });
 };
@@ -77,6 +82,7 @@ export const useCancelTransfer = (id: number | string) => {
     mutationFn: () => transferApi.cancelTransfer(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: transferKeys.all });
+      queryClient.invalidateQueries({ queryKey: ['stock'] });
     }
   });
 };
@@ -87,6 +93,7 @@ export const useConfirmTransfer = (id: number | string) => {
     mutationFn: () => transferApi.confirmTransfer(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: transferKeys.all });
+      queryClient.invalidateQueries({ queryKey: ['stock'] });
     }
   });
 };

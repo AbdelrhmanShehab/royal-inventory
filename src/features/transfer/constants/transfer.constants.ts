@@ -54,6 +54,11 @@ export const TRANSFER_TYPES_CONFIG: Record<TransferType, {
     requiresDestination: true,
     desc: 'نقل كميات بين مستودعين مع دورة اعتماد وتأكيد استلام'
   },
+  laundry: {
+    label: 'مغسلة (Laundry)',
+    requiresDestination: false,
+    desc: 'تحويل بياضات ومفروشات ومواد تشغيلية مباشرة إلى المغسلة المركزية'
+  },
   consumption: {
     label: 'استهلاك تشغيلي (Consumption)',
     requiresDestination: false,

@@ -1,8 +1,5 @@
 export const formatCurrency = (value: number): string => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-  }).format(value);
+  return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value)} جنيه`;
 };
 
 export const formatNumber = (value: number): string => {

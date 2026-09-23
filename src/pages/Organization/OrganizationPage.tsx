@@ -13,18 +13,22 @@ import {
   Layers, 
   ArrowLeftRight, 
   Activity,
-  Package
+  Package,
+  AlertCircle
 } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import Loader from '../../components/ui/Loader';
-import { hierarchyApi } from '../../api/hierarchy.api';
+import { hierarchyApi, filterHierarchyForUserScope } from '../../api/hierarchy.api';
 import type { StockItem } from '../../types/inventory';
 import { transactionsApi } from '../../api/transactions.api';
 import type { OrganizationNode } from '../../types/hierarchy';
 import type { TransferTransaction } from '../../types/transaction';
 
+import { useWarehouseScope } from '../../hooks/useWarehouseScope';
+
 export default function OrganizationPage() {
+  const { currentNodeId, isGlobalAdmin } = useWarehouseScope();
   const [hierarchy, setHierarchy] = useState<OrganizationNode[]>([]);
   const [selectedNode, setSelectedNode] = useState<OrganizationNode | null>(null);
   const [nodeInventory, setNodeInventory] = useState<StockItem[]>([]);
@@ -33,19 +37,48 @@ export default function OrganizationPage() {
   
   // Search & Expand States
   const [searchQuery, setSearchQuery] = useState('');
+  const [showInactive, setShowInactive] = useState(false);
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
+
+  // Helper to find node recursively by numeric/string ID
+  const findNodeInTree = (nodesList: OrganizationNode[], targetId: number | string): OrganizationNode | null => {
+    for (const node of nodesList) {
+      if (Number(node.id) === Number(targetId) || String(node.id) === String(targetId)) {
+        return node;
+      }
+      if (node.children && node.children.length > 0) {
+        const found = findNodeInTree(node.children, targetId);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+
 
   // Fetch initial hierarchy
   useEffect(() => {
     const fetchHierarchy = async () => {
       try {
         const data = await hierarchyApi.getTree();
-        setHierarchy(data);
-        if (data.length > 0) {
-          // Select first root node by default
-          setSelectedNode(data[0]);
-          // Expand first node children by default
-          setExpandedNodes({ [data[0].id]: true });
+        const displayData = (!isGlobalAdmin && currentNodeId) 
+          ? filterHierarchyForUserScope(data, currentNodeId) 
+          : data;
+          
+        setHierarchy(displayData);
+
+        if (displayData.length > 0) {
+          let initialSelected: OrganizationNode | null = null;
+          if (!isGlobalAdmin && currentNodeId) {
+            initialSelected = findNodeInTree(displayData, currentNodeId);
+          }
+          if (!initialSelected) {
+            initialSelected = displayData[0];
+          }
+          setSelectedNode(initialSelected);
+          if (initialSelected) {
+            setExpandedNodes(prev => ({ ...prev, [initialSelected.id]: true }));
+          }
         }
       } catch (err) {
         console.error('Error fetching tree:', err);
@@ -54,7 +87,7 @@ export default function OrganizationPage() {
       }
     };
     fetchHierarchy();
-  }, []);
+  }, [currentNodeId, isGlobalAdmin]);
 
   // Fetch node specific data when selectedNode changes
   useEffect(() => {
@@ -65,12 +98,9 @@ export default function OrganizationPage() {
         const stock = await hierarchyApi.getNodeStock(selectedNode.id);
         setNodeInventory(stock || []);
 
-        // Fetch all transfers and filter for this node
-        const allTransfers = await transactionsApi.getTransfers();
-        const filteredTxs = allTransfers.filter(
-          tx => String(tx.fromNodeId) === String(selectedNode.id) || String(tx.toNodeId) === String(selectedNode.id)
-        );
-        setNodeTransactions(filteredTxs);
+        // Fetch transfers scoped to selected node
+        const nodeTxs = await transactionsApi.getTransfers({ nodeId: selectedNode.id });
+        setNodeTransactions(nodeTxs);
       } catch (err) {
         console.error('Error fetching node details:', err);
       }
@@ -143,17 +173,27 @@ export default function OrganizationPage() {
 
   // Recursive Tree Render
   const renderTree = (nodes: OrganizationNode[]) => {
-    // Filter nodes based on search query
+    // Filter nodes based on search query and active status
     const filterTree = (list: OrganizationNode[]): OrganizationNode[] => {
       return list
         .map(node => ({
           ...node,
           children: node.children ? filterTree(node.children) : undefined
         }))
-        .filter(node => 
-          node.name.includes(searchQuery) || 
-          (node.children && node.children.length > 0)
-        );
+        .filter(node => {
+          const isNodeActive = node.status === 'active' || node.type === 'group';
+          const hasChildren = Boolean(node.children && node.children.length > 0);
+
+          // If hiding inactive nodes, exclude inactive nodes unless they have active children
+          if (!showInactive && !isNodeActive && !hasChildren) {
+            return false;
+          }
+
+          if (searchQuery.trim()) {
+            return node.name.includes(searchQuery) || hasChildren;
+          }
+          return true;
+        });
     };
 
     const filtered = filterTree(nodes);
@@ -163,6 +203,7 @@ export default function OrganizationPage() {
         const hasChildren = node.children && node.children.length > 0;
         const isExpanded = !!expandedNodes[node.id];
         const isSelected = selectedNode?.id === node.id;
+        const isNodeInactive = node.status === 'inactive' && node.type !== 'group';
 
         return (
           <div key={node.id} className="flex flex-col select-none">
@@ -173,6 +214,8 @@ export default function OrganizationPage() {
                 flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer group mb-1
                 ${isSelected 
                   ? 'bg-blue-50 text-blue-700 font-bold border-r-4 border-blue-600' 
+                  : isNodeInactive
+                  ? 'text-slate-400 bg-slate-50/70 hover:bg-slate-100/70 opacity-75'
                   : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}
               `}
               style={{ paddingRight: `${depth * 16 + 12}px` }}
@@ -187,12 +230,17 @@ export default function OrganizationPage() {
                   </button>
                 ) : (
                   <div className="w-6 h-6 flex items-center justify-center">
-                    <span className="w-1.5 h-1.5 bg-slate-300 rounded-full"></span>
+                    <span className={`w-1.5 h-1.5 rounded-full ${isNodeInactive ? 'bg-amber-400' : 'bg-slate-300'}`}></span>
                   </div>
                 )}
                 <div className="flex items-center gap-2">
                   {getNodeIcon(node.type)}
-                  <span>{node.name}</span>
+                  <span className={isNodeInactive ? 'text-slate-400' : ''}>{node.name}</span>
+                  {isNodeInactive && (
+                    <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                      معطل
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -241,8 +289,8 @@ export default function OrganizationPage() {
       
       {/* LEFT SIDEBAR: Hierarchical Explorer Tree */}
       <div className="lg:col-span-1 bg-white border border-slate-200/80 rounded-2xl flex flex-col h-full overflow-hidden shadow-xs">
-        {/* Tree Search Box */}
-        <div className="p-4 border-b border-slate-100">
+        {/* Tree Search Box & Inactive Filter */}
+        <div className="p-3.5 border-b border-slate-100 flex flex-col gap-2.5">
           <div className="relative flex items-center">
             <Search size={16} className="absolute right-3 text-slate-400 pointer-events-none" />
             <input 
@@ -250,8 +298,19 @@ export default function OrganizationPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="بحث في الوحدات..." 
-              className="w-full pr-9 pl-3 py-2 bg-slate-50 border border-slate-200 text-xs rounded-lg placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="w-full pr-9 pl-3 py-1.5 bg-slate-50 border border-slate-200 text-xs rounded-lg placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             />
+          </div>
+          <div className="flex items-center justify-between text-[11px] text-slate-500 px-1">
+            <label className="flex items-center gap-1.5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={showInactive}
+                onChange={(e) => setShowInactive(e.target.checked)}
+                className="w-3.5 h-3.5 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer"
+              />
+              <span className="font-semibold text-slate-600">إظهار المستودعات المعطلة</span>
+            </label>
           </div>
         </div>
 
@@ -265,6 +324,16 @@ export default function OrganizationPage() {
       <div className="lg:col-span-3 flex flex-col gap-6 h-full overflow-y-auto pr-1">
         {selectedNode ? (
           <>
+            {/* Deactivation Warning Banner if Selected Node is Inactive */}
+            {selectedNode.status === 'inactive' && (
+              <div className="bg-amber-50 border border-amber-200 text-amber-900 p-3.5 rounded-xl text-xs flex items-center gap-2 shadow-2xs">
+                <AlertCircle size={18} className="text-amber-600 flex-shrink-0" />
+                <span>
+                  <strong>تنبيه:</strong> هذه الوحدة / المستودع <strong>معطل حالياً</strong> وخارج نطاق العمليات التشغيلية (لا يستقبل تحويلات جديدة أو حركات صرف، وتم إيقاف مزامنته مع أي نظام خارجي).
+                </span>
+              </div>
+            )}
+
             {/* 1. Header Information Block */}
             <div className="bg-white border border-slate-200/80 p-6 rounded-2xl shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4 select-none">
               <div className="flex items-center gap-3">
@@ -368,8 +437,8 @@ export default function OrganizationPage() {
                       <div className="p-6 text-center text-xs text-slate-400">لا يوجد مخزون مسجل حالياً لهذه الوحدة</div>
                     ) : (
                       <div className="divide-y divide-slate-100">
-                        {nodeInventory.map((item) => (
-                          <div key={item.item_code} className="flex justify-between items-center p-3 hover:bg-slate-50/50">
+                        {nodeInventory.map((item, idx) => (
+                          <div key={`${item.item_code}-${idx}`} className="flex justify-between items-center p-3 hover:bg-slate-50/50">
                             <div className="flex flex-col text-right">
                               <span className="text-xs font-bold text-slate-800">{item.item_name_ar}</span>
                               <span className="text-[9px] text-slate-400 mt-0.5">{item.item_code}</span>
@@ -394,8 +463,8 @@ export default function OrganizationPage() {
                       <div className="p-6 text-center text-xs text-slate-400">لا توجد أصناف مستهلكة مسجلة</div>
                     ) : (
                       <div className="divide-y divide-slate-100">
-                        {mostConsumed.map((item) => (
-                          <div key={item.item_code} className="flex justify-between items-center p-3 hover:bg-slate-50/50">
+                        {mostConsumed.map((item, idx) => (
+                          <div key={`${item.item_code}-${idx}`} className="flex justify-between items-center p-3 hover:bg-slate-50/50">
                             <div className="flex flex-col text-right">
                               <span className="text-xs font-bold text-slate-800">{item.item_name_ar}</span>
                               <span className="text-[9px] text-slate-400 mt-0.5">{item.item_code}</span>

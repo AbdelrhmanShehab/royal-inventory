@@ -14,12 +14,17 @@ import {
   Plus,
   Trash2,
   CheckCircle,
-  FileText,
   AlertCircle,
   ShieldAlert,
   Send,
   ClipboardCheck,
-  X
+  X,
+  Filter,
+  Truck,
+  CheckCheck,
+  Package,
+  Sparkles,
+  Inbox
 } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -29,6 +34,7 @@ import Modal from '../../components/ui/Modal';
 import Input from '../../components/ui/Input';
 import { laundryApi } from '../../api/laundry.api';
 import { warehousesApi } from '../../api/warehouses.api';
+import { hierarchyApi } from '../../api/hierarchy.api';
 import { useAuth } from '../../context/AuthContext';
 import type {
   LaundryReconciliation,
@@ -52,11 +58,11 @@ const STANDARD_LINENS = [
 ];
 
 export default function ReportsReconciliation() {
-  const { hasPermission } = useAuth();
-  const canManage = hasPermission('manage_laundry_operations');
-  const canReceive = hasPermission('receive_laundry_items');
-  const canViewPOS = hasPermission('view_laundry_pos');
-  const canViewFull = hasPermission('view_laundry');
+  const { hasPermission, user } = useAuth();
+  const canManage = hasPermission('manage_laundry_operations') || hasPermission('view_laundry') || user?.role === 'warehouse_manager' || user?.role === 'warehouse_head' || user?.role === 'manager' || user?.role === 'admin';
+  const canReceive = hasPermission('receive_laundry_items') || hasPermission('view_laundry') || user?.role === 'warehouse_manager' || user?.role === 'warehouse_head' || user?.role === 'manager' || user?.role === 'admin';
+  const canViewPOS = hasPermission('view_laundry_pos') || hasPermission('view_laundry') || user?.role === 'admin';
+  const canViewFull = hasPermission('view_laundry') || user?.role === 'warehouse_manager' || user?.role === 'warehouse_head' || user?.role === 'manager' || user?.role === 'admin';
 
   const availableTabs = [
     { id: 'reconciliation' as const, label: 'مطابقة حركة الأرصدة والتحليل', icon: BarChart3, show: canViewFull || canManage || canViewPOS || canReceive },
@@ -102,6 +108,19 @@ export default function ReportsReconciliation() {
   const [returnsSearch, setReturnsSearch] = useState('');
   const [lossesSearch, setLossesSearch] = useState('');
   const [transferItemSearch, setTransferItemSearch] = useState('');
+
+  // Operations / Transfers Filters
+  const [transferStatusFilter, setTransferStatusFilter] = useState<'all' | 'sent' | 'received' | 'partially_received'>('all');
+  const [transferWarehouseFilter, setTransferWarehouseFilter] = useState<string>('all');
+  const [transferDateFrom, setTransferDateFrom] = useState<string>('');
+  const [transferDateTo, setTransferDateTo] = useState<string>('');
+
+  // Returns Filters
+  const [returnStatusFilter, setReturnStatusFilter] = useState<'all' | 'completed' | 'partial_received' | 'draft'>('all');
+
+  // Warehouse Stock Map for transfer live stock check
+  const [warehouseStock, setWarehouseStock] = useState<Record<string, number>>({});
+  const [loadingWarehouseStock, setLoadingWarehouseStock] = useState(false);
 
   // --- FORM STATES ---
   // Create Transfer Form
@@ -157,14 +176,45 @@ export default function ReportsReconciliation() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [recList, profList, transList, retList, lossList, whList] = await Promise.all([
-        laundryApi.getReconciliationReport(),
-        laundryApi.getProfitabilityReport(dateFilter.fromDate, dateFilter.toDate),
-        laundryApi.getTransfers(),
-        laundryApi.getReturns(),
-        laundryApi.getLosses(),
-        warehousesApi.getWarehouses()
+      const [recList, profList, rawTransList, rawRetList, lossList, whList] = await Promise.all([
+        laundryApi.getReconciliationReport().catch(() => []),
+        laundryApi.getProfitabilityReport(dateFilter.fromDate, dateFilter.toDate).catch(() => []),
+        laundryApi.getTransfers().catch(() => []),
+        laundryApi.getReturns().catch(() => []),
+        laundryApi.getLosses().catch(() => []),
+        warehousesApi.getWarehouses().catch(() => [])
       ]);
+
+      // Enrich transfers with full item lines and remaining balances
+      const transList: LaundryTransfer[] = await Promise.all(
+        (rawTransList || []).map(async (t: any) => {
+          if (!t.items || t.items.length === 0) {
+            try {
+              const detail = await laundryApi.getTransferById(t.id);
+              return { ...t, items: detail?.items || [] };
+            } catch {
+              return t;
+            }
+          }
+          return t;
+        })
+      );
+
+      // Enrich returns with full item lines
+      const retList: LaundryReturn[] = await Promise.all(
+        (rawRetList || []).map(async (r: any) => {
+          if (!r.items || r.items.length === 0) {
+            try {
+              const detail = await laundryApi.getReturnById(r.id);
+              return { ...r, items: detail?.items || [] };
+            } catch {
+              return r;
+            }
+          }
+          return r;
+        })
+      );
+
       setReconciliation(recList || []);
       setProfitability(profList || []);
       setTransfers(transList || []);
@@ -225,9 +275,36 @@ export default function ReportsReconciliation() {
     }
   }, [warehouseSearch, warehouses, transferForm.fromWarehouseId]);
 
+  // Load warehouse operational stock when source warehouse is selected
+  useEffect(() => {
+    if (!transferForm.fromWarehouseId) {
+      setWarehouseStock({});
+      return;
+    }
+    let isMounted = true;
+    const fetchStock = async () => {
+      try {
+        setLoadingWarehouseStock(true);
+        const stockItems = await hierarchyApi.getNodeStock(Number(transferForm.fromWarehouseId));
+        if (!isMounted) return;
+        const map: Record<string, number> = {};
+        for (const item of (stockItems || [])) {
+          map[item.item_code] = Number(item.qty_operational || 0);
+        }
+        setWarehouseStock(map);
+      } catch (err) {
+        console.error('Failed to load warehouse stock:', err);
+      } finally {
+        if (isMounted) setLoadingWarehouseStock(false);
+      }
+    };
+    fetchStock();
+    return () => { isMounted = false; };
+  }, [transferForm.fromWarehouseId]);
+
   useEffect(() => {
     const filtered = transfers
-      .filter(t => t.status === 'received' && (t.items || []).some(i => i.remainingQty > 0))
+      .filter(t => (t.status === 'received' || t.status === 'partially_received') && (t.items || []).some(i => (i.remainingQty ?? i.receivedQty ?? 0) > 0))
       .filter(t =>
         String(t.id).includes(transferSearch) ||
         t.fromWarehouseName.toLowerCase().includes(transferSearch.toLowerCase())
@@ -253,7 +330,7 @@ export default function ReportsReconciliation() {
 
   // --- ACTIONS ---
 
-  // 1. Create Transfer Draft
+  // 1. Create Transfer (Direct Dispatch to Laundry)
   const handleAddTransferItem = () => {
     const matched = STANDARD_LINENS.find(l => l.itemCode === transferItemInput.itemCode);
     if (!matched) return;
@@ -261,6 +338,18 @@ export default function ReportsReconciliation() {
       alert('يجب إدخال كمية أكبر من الصفر.');
       return;
     }
+
+    // Check available stock if warehouse is selected
+    if (transferForm.fromWarehouseId) {
+      const avail = warehouseStock[transferItemInput.itemCode] ?? 0;
+      const exists = transferForm.items.find(i => i.itemCode === transferItemInput.itemCode);
+      const totalRequested = (exists ? exists.sentQty : 0) + transferItemInput.sentQty;
+      if (avail > 0 && totalRequested > avail) {
+        alert(`الكمية المطلوبة للصنف (${matched.itemNameAr}) هي ${totalRequested} حبة، ولكن الرصيد المتوفر في هذا المستودع هو ${avail} حبة فقط. الرجاء تقليل الكمية.`);
+        return;
+      }
+    }
+
     const exists = transferForm.items.find(i => i.itemCode === transferItemInput.itemCode);
     if (exists) {
       setTransferForm(prev => ({
@@ -298,25 +387,38 @@ export default function ReportsReconciliation() {
       alert('يجب إضافة صنف واحد على الأقل للتحويل.');
       return;
     }
+
+    // Strict client-side check against available warehouse stock
+    for (const item of transferForm.items) {
+      const avail = warehouseStock[item.itemCode] ?? 0;
+      if (avail > 0 && item.sentQty > avail) {
+        alert(`الكمية المحددة للصنف (${item.itemNameAr}) تتجاوز الرصيد المتوفر في المستودع (${avail} حبة). الرجاء تصحيح الكمية.`);
+        return;
+      }
+    }
+
     try {
       setSubmitting(true);
       await laundryApi.createTransfer({
         fromWarehouseId: Number(transferForm.fromWarehouseId),
         notes: transferForm.notes,
-        items: transferForm.items.map(i => ({
-          itemCode: i.itemCode,
-          itemNameAr: i.itemNameAr,
-          sentQty: i.sentQty,
-          unitCode: 'PCS',
-          unitCost: 150 // Standard estimated replacement value
-        }))
+        items: transferForm.items.map(i => {
+          const matchedRecon = reconciliation.find(r => r.itemCode === i.itemCode);
+          return {
+            itemCode: i.itemCode,
+            itemNameAr: i.itemNameAr,
+            sentQty: i.sentQty,
+            unitCode: 'PCS',
+            unitCost: (matchedRecon as any)?.unitCost || (i as any).unitCost || 0
+          };
+        })
       });
       setIsCreateTransferOpen(false);
       setTransferForm({ fromWarehouseId: '', notes: '', items: [] });
       loadData();
     } catch (err: any) {
       console.error(err);
-      alert('خطأ أثناء حفظ مسودة التحويل: ' + (err.response?.data?.message || err.message));
+      alert('خطأ أثناء إرسال شحنة البياضات للمغسلة: ' + (err.response?.data?.message || err.message));
     } finally {
       setSubmitting(false);
     }
@@ -338,12 +440,21 @@ export default function ReportsReconciliation() {
   };
 
   // 3. Receive & Verify Transfer (Laundry Side)
-  const handleOpenReceiveModal = (t: LaundryTransfer) => {
-    setSelectedReceiveTransfer(t);
+  const handleOpenReceiveModal = async (t: LaundryTransfer) => {
+    let fullTransfer = t;
+    if (!t.items || t.items.length === 0) {
+      try {
+        const detail = await laundryApi.getTransferById(t.id);
+        if (detail && detail.items) fullTransfer = detail;
+      } catch (err) {
+        console.error('Failed to load transfer items:', err);
+      }
+    }
+    setSelectedReceiveTransfer(fullTransfer);
     setReceiveForm({
-      transferId: t.id,
+      transferId: fullTransfer.id,
       notes: '',
-      items: (t.items || []).map(item => ({
+      items: (fullTransfer.items || []).map(item => ({
         itemCode: item.itemCode,
         actualQty: item.sentQty,
         rejectReason: '',
@@ -360,12 +471,17 @@ export default function ReportsReconciliation() {
       await laundryApi.receiveTransfer({
         transferId: receiveForm.transferId,
         notes: receiveForm.notes,
-        items: receiveForm.items.map(i => ({
-          itemCode: i.itemCode,
-          actualQty: Number(i.actualQty),
-          rejectReason: i.rejectReason || null,
-          rejectNotes: i.rejectNotes || null
-        }))
+        items: receiveForm.items.map(i => {
+          const orig = (selectedReceiveTransfer.items || []).find(oi => oi.itemCode === i.itemCode);
+          const sentQty = orig ? orig.sentQty : i.actualQty;
+          const isDiff = Number(i.actualQty) < sentQty;
+          return {
+            itemCode: i.itemCode,
+            actualQty: Number(i.actualQty),
+            rejectReason: isDiff ? (i.rejectReason || 'Damaged') : null,
+            rejectNotes: isDiff ? (i.rejectNotes || 'تالف أو عجز استلام بالمغسلة') : null
+          };
+        })
       });
       setSelectedReceiveTransfer(null);
       loadData();
@@ -378,21 +494,32 @@ export default function ReportsReconciliation() {
   };
 
   // 4. Create Clean Return Draft (Laundry to Hotel)
-  const handleTransferChangeInReturn = (tId: string) => {
-    const selectedTrans = transfers.find(t => t.id === Number(tId));
+  const handleTransferChangeInReturn = async (tId: string) => {
+    let selectedTrans = transfers.find(t => t.id === Number(tId));
     if (!selectedTrans) {
       setReturnForm(prev => ({ ...prev, transferId: tId, items: [] }));
       return;
     }
+    if (!selectedTrans.items || selectedTrans.items.length === 0) {
+      try {
+        const detail = await laundryApi.getTransferById(Number(tId));
+        if (detail && detail.items) selectedTrans = detail;
+      } catch (err) {
+        console.error('Failed to load transfer items for return:', err);
+      }
+    }
     // Render lines for items with remainingQty > 0
     const lines = (selectedTrans.items || [])
-      .filter(i => i.remainingQty > 0)
-      .map(i => ({
-        itemCode: i.itemCode,
-        itemNameAr: i.itemNameAr,
-        expectedQty: i.remainingQty, // Default to returning all remaining outstanding
-        maxRemaining: i.remainingQty
-      }));
+      .filter(i => (i.remainingQty ?? i.receivedQty ?? 0) > 0)
+      .map(i => {
+        const qtyRemaining = i.remainingQty ?? i.receivedQty ?? 0;
+        return {
+          itemCode: i.itemCode,
+          itemNameAr: i.itemNameAr,
+          expectedQty: qtyRemaining, // Default to returning all remaining outstanding
+          maxRemaining: qtyRemaining
+        };
+      });
     setReturnForm({
       transferId: tId,
       notes: '',
@@ -441,13 +568,22 @@ export default function ReportsReconciliation() {
   };
 
   // 5. Verify Clean Return (Hotel Side)
-  const handleOpenVerifyReturnModal = (r: LaundryReturn) => {
-    setSelectedVerifyReturn(r);
+  const handleOpenVerifyReturnModal = async (r: LaundryReturn) => {
+    let fullReturn = r;
+    if (!r.items || r.items.length === 0) {
+      try {
+        const detail = await laundryApi.getReturnById(r.id);
+        if (detail && detail.items) fullReturn = detail;
+      } catch (err) {
+        console.error('Failed to load return items:', err);
+      }
+    }
+    setSelectedVerifyReturn(fullReturn);
     setVerifyForm({
-      returnId: r.id,
+      returnId: fullReturn.id,
       status: 'completed',
       notes: '',
-      items: (r.items || []).map(item => ({
+      items: (fullReturn.items || []).map(item => ({
         itemCode: item.itemCode,
         actualQty: item.expectedQty,
         rejectReason: '',
@@ -461,15 +597,25 @@ export default function ReportsReconciliation() {
     if (!selectedVerifyReturn) return;
     try {
       setSubmitting(true);
+      const hasAnyDifference = verifyForm.items.some(i => {
+        const orig = (selectedVerifyReturn.items || []).find(oi => oi.itemCode === i.itemCode);
+        return orig && Number(i.actualQty) < orig.expectedQty;
+      });
+      const finalStatus = hasAnyDifference ? (verifyForm.status === 'completed' ? 'partial_received' : verifyForm.status) : verifyForm.status;
+
       await laundryApi.verifyReturn(verifyForm.returnId, {
-        status: verifyForm.status,
+        status: finalStatus,
         notes: verifyForm.notes,
-        items: verifyForm.items.map(i => ({
-          itemCode: i.itemCode,
-          actualQty: Number(i.actualQty),
-          rejectReason: i.rejectReason || null,
-          rejectNotes: i.rejectNotes || null
-        }))
+        items: verifyForm.items.map(i => {
+          const orig = (selectedVerifyReturn.items || []).find(oi => oi.itemCode === i.itemCode);
+          const isDiff = orig && Number(i.actualQty) < orig.expectedQty;
+          return {
+            itemCode: i.itemCode,
+            actualQty: Number(i.actualQty),
+            rejectReason: isDiff ? (i.rejectReason || 'Damaged') : null,
+            rejectNotes: isDiff ? (i.rejectNotes || 'تالف / عجز أثناء الاستلام بالفندق') : null
+          };
+        })
       });
       setSelectedVerifyReturn(null);
       loadData();
@@ -572,10 +718,10 @@ export default function ReportsReconciliation() {
               {/* Financial aggregate KPIs */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
-                  { label: 'إجمالي إيرادات المغسلة (POS)', value: `${totalRevenue.toLocaleString()} ج.م`, trend: 'نشط من تذاكر النزلاء', isUp: true, color: 'text-emerald-600 bg-emerald-50 border-emerald-100' },
-                  { label: 'تكاليف الكيماويات والمواد', value: `${totalChemical.toLocaleString()} ج.م`, trend: 'ضمن معايير الجرعات الكيميائية', isUp: false, color: 'text-blue-600 bg-blue-50 border-blue-100' },
-                  { label: 'تقديرات الكهرباء والمياه', value: `${totalUtilities.toLocaleString()} ج.م`, trend: 'تقديري بالاعتماد على التشغيل', isUp: false, color: 'text-purple-600 bg-purple-50 border-purple-100' },
-                  { label: 'صافي أرباح التشغيل', value: `${totalNetProfit.toLocaleString()} ج.م`, trend: `هامش ربح صافي ${totalRevenue ? Math.round((totalNetProfit / totalRevenue) * 100) : 0}%`, isUp: true, color: 'text-rose-600 bg-rose-50 border-rose-100' }
+                  { label: 'إجمالي إيرادات المغسلة (POS)', value: `${totalRevenue.toLocaleString()} جنيه`, trend: 'نشط من تذاكر النزلاء', isUp: true, color: 'text-emerald-600 bg-emerald-50 border-emerald-100' },
+                  { label: 'تكاليف الكيماويات والمواد', value: `${totalChemical.toLocaleString()} جنيه`, trend: 'ضمن معايير الجرعات الكيميائية', isUp: false, color: 'text-blue-600 bg-blue-50 border-blue-100' },
+                  { label: 'تقديرات الكهرباء والمياه', value: `${totalUtilities.toLocaleString()} جنيه`, trend: 'تقديري بالاعتماد على التشغيل', isUp: false, color: 'text-purple-600 bg-purple-50 border-purple-100' },
+                  { label: 'صافي أرباح التشغيل', value: `${totalNetProfit.toLocaleString()} جنيه`, trend: `هامش ربح صافي ${totalRevenue ? Math.round((totalNetProfit / totalRevenue) * 100) : 0}%`, isUp: true, color: 'text-rose-600 bg-rose-50 border-rose-100' }
                 ].map((kpi, idx) => (
                   <Card key={idx} className="border-slate-200/60 shadow-2xs">
                     <Card.Body className="p-4 flex flex-col justify-between h-full gap-3">
@@ -614,7 +760,7 @@ export default function ReportsReconciliation() {
                                 <factor.icon size={14} className="text-slate-400" />
                                 {factor.name}
                               </span>
-                              <span>{factor.pct}% ({factor.amt.toLocaleString()} ج.م)</span>
+                              <span>{factor.pct}% ({factor.amt.toLocaleString()} جنيه)</span>
                             </div>
                             <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
                               <div className={`h-full ${factor.color} rounded-full`} style={{ width: `${factor.pct}%` }}></div>
@@ -624,7 +770,7 @@ export default function ReportsReconciliation() {
                       </div>
                       <div className="border-t border-slate-100 pt-4 flex justify-between items-center text-xs text-slate-500 font-bold">
                         <span>إجمالي مصاريف التشغيل:</span>
-                        <span className="text-slate-800 text-sm font-extrabold">{grandTotalCost.toLocaleString()} ج.م</span>
+                        <span className="text-slate-800 text-sm font-extrabold">{grandTotalCost.toLocaleString()} جنيه</span>
                       </div>
                     </Card.Body>
                   </Card>
@@ -787,268 +933,553 @@ export default function ReportsReconciliation() {
           )}
 
           {/* TAB 2: TRANSFERS & RECEIVING */}
-          {activeTab === 'transfers' && (
-            <div className="flex flex-col gap-6">
-              <div className="flex justify-between items-center">
-                <h2 className="text-base font-bold text-slate-800">حركة تحويل البياضات المتسخة إلى المغسلة</h2>
-                {canManage && (
-                  <Button variant="primary" size="sm" onClick={() => setIsCreateTransferOpen(true)}>
-                    <Plus size={15} />
-                    تحويل بياضات متسخة جديدة
-                  </Button>
-                )}
-              </div>
+          {activeTab === 'transfers' && (() => {
+            const activeTransfers = [...transfers]
+              .filter(t => t.status !== 'draft')
+              .sort((a, b) => Number(b.id) - Number(a.id));
+            const totalShipmentsCount = activeTransfers.length;
+            const totalPiecesSent = activeTransfers.reduce((sum, t) =>
+              sum + (t.items || []).reduce((iSum, i) => iSum + (Number(i.sentQty) || 0), 0), 0
+            );
+            const inTransitPieces = activeTransfers
+              .filter(t => t.status === 'sent' || t.status === 'dispatched')
+              .reduce((sum, t) => sum + (t.items || []).reduce((iSum, i) => iSum + (Number(i.sentQty) || 0), 0), 0);
+            const receivedPieces = activeTransfers
+              .filter(t => t.status === 'received' || t.status === 'partially_received')
+              .reduce((sum, t) => sum + (t.items || []).reduce((iSum, i) => iSum + (Number(i.receivedQty || i.sentQty) || 0), 0), 0);
 
-              {/* Split view: Drafts vs Dispatched */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            const filteredTransfers = activeTransfers.filter(t => {
+              // Status filter
+              if (transferStatusFilter !== 'all') {
+                if (transferStatusFilter === 'sent') {
+                  if (t.status !== 'sent' && t.status !== 'dispatched') return false;
+                } else if (t.status !== transferStatusFilter) {
+                  return false;
+                }
+              }
 
-                {/* Drafts List (1 Col) */}
-                <div className="flex flex-col gap-4">
-                  <h3 className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
-                    <FileText size={14} />
-                    مسودات التحويل المعلقة (Draft)
-                  </h3>
-                  <div className="flex flex-col gap-3">
-                    {transfers.filter(t => t.status === 'draft').length === 0 ? (
-                      <div className="bg-white border border-slate-200/60 p-6 rounded-xl text-center text-slate-400 text-xs">
-                        لا توجد مسودات تحويل حالية.
-                      </div>
-                    ) : (
-                      transfers.filter(t => t.status === 'draft').map(t => (
-                        <div key={t.id} className="bg-white border border-slate-200 p-4 rounded-xl shadow-2xs flex flex-col gap-3">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <span className="text-[10px] font-bold text-slate-400 block">شحنة #{t.id}</span>
-                              <span className="text-xs font-bold text-slate-800 block mt-0.5">{t.fromWarehouseName}</span>
-                            </div>
-                            <Badge variant="neutral">مسودة</Badge>
-                          </div>
+              // Warehouse filter
+              if (transferWarehouseFilter !== 'all') {
+                if (String(t.fromWarehouseId) !== transferWarehouseFilter) return false;
+              }
 
-                          <div className="text-[10px] text-slate-505 bg-slate-50 p-2 rounded-lg border border-slate-100 max-h-24 overflow-y-auto">
-                            {(t.items || []).map(i => (
-                              <div key={i.itemId} className="flex justify-between py-0.5">
-                                <span>{i.itemNameAr}</span>
-                                <span className="font-bold text-slate-700">{i.sentQty} حبة</span>
-                              </div>
-                            ))}
-                          </div>
+              // Date range filter
+              if (transferDateFrom) {
+                const d = t.createdAt ? t.createdAt.split('T')[0] : '';
+                if (d < transferDateFrom) return false;
+              }
+              if (transferDateTo) {
+                const d = t.createdAt ? t.createdAt.split('T')[0] : '';
+                if (d > transferDateTo) return false;
+              }
 
-                          {canManage && (
-                            <div className="flex justify-end gap-1.5">
-                              <Button
-                                variant="primary"
-                                size="sm"
-                                onClick={() => handleSendTransfer(t.id)}
-                                isLoading={submitting}
-                                className="w-full justify-center"
-                              >
-                                <Send size={12} className="ml-1" />
-                                إرسال للمغسلة
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
+              // Search query
+              if (transfersSearch.trim()) {
+                const q = transfersSearch.toLowerCase().trim();
+                const matchesId = String(t.id).includes(q);
+                const matchesWh = (t.fromWarehouseName || '').toLowerCase().includes(q);
+                const matchesItem = (t.items || []).some(i =>
+                  (i.itemNameAr || '').toLowerCase().includes(q) ||
+                  (i.itemCode || '').toLowerCase().includes(q)
+                );
+                if (!matchesId && !matchesWh && !matchesItem) return false;
+              }
 
-                {/* Dispatched & Received List (2 Cols) */}
-                <div className="lg:col-span-2 flex flex-col gap-4">
-                  <div className="flex justify-between items-center gap-3">
-                    <h3 className="text-xs font-bold text-slate-505 flex items-center gap-1.5">
-                      <Activity size={14} />
-                      أرشيف الشحنات والتحويلات النشطة
-                    </h3>
-                    <div className="relative w-48">
-                      <input
-                        type="text"
-                        placeholder="ابحث برقم الشحنة أو المصدر..."
-                        value={transfersSearch}
-                        onChange={(e) => setTransfersSearch(e.target.value)}
-                        className="w-full pr-8 pl-3 py-1 bg-white border border-slate-200 rounded-lg text-[10px] font-bold text-slate-900 focus:outline-none focus:border-blue-500"
-                      />
-                      <span className="absolute right-2 top-1.5 text-slate-400">
-                        <Search size={12} />
-                      </span>
-                    </div>
-                  </div>
-                  <div className="border border-slate-200 rounded-xl overflow-hidden text-xs bg-white">
-                    <table className="w-full text-right border-collapse">
-                      <thead className="bg-slate-50">
-                        <tr>
-                          <th className="px-4 py-2.5 font-bold text-slate-505">رقم الشحنة</th>
-                          <th className="px-4 py-2.5 font-bold text-slate-505">المستودع المصدر</th>
-                          <th className="px-4 py-2.5 text-center font-bold text-slate-505">الكمية الإجمالية</th>
-                          <th className="px-4 py-2.5 text-center font-bold text-slate-505">تاريخ الإرسال</th>
-                          <th className="px-4 py-2.5 text-center font-bold text-slate-505">الحالة</th>
-                          <th className="px-4 py-2.5 text-center font-bold text-slate-505">إجراءات</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {transfers.filter(t => t.status !== 'draft').filter(t =>
-                          String(t.id).includes(transfersSearch) ||
-                          t.fromWarehouseName.toLowerCase().includes(transfersSearch.toLowerCase())
-                        ).length === 0 ? (
-                          <tr>
-                            <td colSpan={6} className="p-8 text-center text-slate-400">لا توجد تحويلات نشطة مسجلة مطابقة للبحث.</td>
-                          </tr>
-                        ) : (
-                          transfers.filter(t => t.status !== 'draft').filter(t =>
-                            String(t.id).includes(transfersSearch) ||
-                            t.fromWarehouseName.toLowerCase().includes(transfersSearch.toLowerCase())
-                          ).map(t => {
-                            const totalQty = (t.items || []).reduce((sum, i) => sum + i.sentQty, 0);
-                            return (
-                              <tr key={t.id} className="hover:bg-slate-50/50">
-                                <td className="px-4 py-3 font-mono font-bold text-slate-505">#{t.id}</td>
-                                <td className="px-4 py-3 font-bold text-slate-700">{t.fromWarehouseName}</td>
-                                <td className="px-4 py-3 text-center text-slate-650 font-bold">{totalQty} حبة</td>
-                                <td className="px-4 py-3 text-center text-slate-450">{new Date(t.createdAt).toLocaleDateString('ar-EG')}</td>
-                                <td className="px-4 py-3 text-center">
-                                  <Badge variant={t.status === 'received' ? 'success' : t.status === 'dispatched' ? 'warning' : 'neutral'}>
-                                    {t.status === 'received' ? 'مستلم بالمغسلة' : t.status === 'dispatched' ? 'تحت الشحن للمغسلة' : t.status}
-                                  </Badge>
-                                </td>
-                                <td className="px-4 py-3 text-center">
-                                  {t.status === 'dispatched' && (
-                                    canReceive ? (
-                                      <button
-                                        onClick={() => handleOpenReceiveModal(t)}
-                                        className="px-2.5 py-1 text-[10px] font-bold text-blue-600 hover:text-blue-800 border border-blue-200 rounded bg-blue-50 cursor-pointer"
-                                      >
-                                        تأكيد الاستلام بالمغسلة
-                                      </button>
-                                    ) : (
-                                      <span className="text-[10px] text-slate-400 font-bold">بانتظار التأكيد</span>
-                                    )
-                                  )}
-                                  {t.status === 'received' && (
-                                    <span className="text-[10px] text-emerald-600 font-bold flex items-center justify-center gap-1">
-                                      <CheckCircle size={12} />
-                                      مسجل ومطابق
-                                    </span>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+              return true;
+            }).sort((a, b) => Number(b.id) - Number(a.id));
 
-              </div>
-            </div>
-          )}
-
-          {/* TAB 3: LAUNDRY RETURNS & VERIFICATION */}
-          {activeTab === 'returns' && (
-            <div className="flex flex-col gap-6">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
-                <h2 className="text-base font-bold text-slate-800">إرجاع البياضات النظيفة إلى مستودعات الفندق</h2>
-                <div className="flex items-center gap-3 w-full md:w-auto">
-                  <div className="relative w-full md:w-60">
-                    <input
-                      type="text"
-                      placeholder="ابحث برقم المرتجع أو التحويل أو المسؤول..."
-                      value={returnsSearch}
-                      onChange={(e) => setReturnsSearch(e.target.value)}
-                      className="w-full pr-8 pl-3.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-900 focus:outline-none focus:border-blue-500"
-                    />
-                    <span className="absolute right-2.5 top-2.5 text-slate-400">
-                      <Search size={14} />
-                    </span>
+            return (
+              <div className="flex flex-col gap-5">
+                {/* Header with Title & Action */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                  <div>
+                    <h2 className="text-base lg:text-lg font-bold text-slate-800 flex items-center gap-2">
+                      <Activity className="text-blue-600" size={20} />
+                      عمليات تحويل البياضات المتسخة إلى المغسلة
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      متابعة الشحنات المحولة من المستودعات مع خصم الأرصدة تلقائياً ومطابقة الاستلام بالمغسلة.
+                    </p>
                   </div>
                   {canManage && (
-                    <Button variant="primary" size="sm" onClick={() => setIsCreateReturnOpen(true)} className="flex-shrink-0">
-                      <Plus size={15} />
+                    <Button variant="primary" size="sm" onClick={() => setIsCreateTransferOpen(true)} className="flex-shrink-0 shadow-sm">
+                      <Plus size={16} />
+                      تحويل بياضات جديدة للمغسلة
+                    </Button>
+                  )}
+                </div>
+
+                {/* KPI Metrics Summary Bar */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+                  <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-2xs flex flex-col justify-between">
+                    <div className="flex items-center justify-between text-slate-500 text-xs font-bold mb-1.5">
+                      <span>إجمالي الشحنات</span>
+                      <span className="p-1.5 bg-blue-50 text-blue-600 rounded-lg"><Truck size={15} /></span>
+                    </div>
+                    <div className="text-xl font-extrabold text-slate-800">{totalShipmentsCount} <span className="text-xs font-normal text-slate-400">شحنة</span></div>
+                  </div>
+
+                  <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-2xs flex flex-col justify-between">
+                    <div className="flex items-center justify-between text-slate-500 text-xs font-bold mb-1.5">
+                      <span>إجمالي البياضات المحولة</span>
+                      <span className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg"><Package size={15} /></span>
+                    </div>
+                    <div className="text-xl font-extrabold text-indigo-600">{totalPiecesSent} <span className="text-xs font-normal text-slate-400">حبة</span></div>
+                  </div>
+
+                  <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-2xs flex flex-col justify-between">
+                    <div className="flex items-center justify-between text-slate-500 text-xs font-bold mb-1.5">
+                      <span>تحت الشحن للمغسلة</span>
+                      <span className="p-1.5 bg-amber-50 text-amber-600 rounded-lg"><ArrowLeftRight size={15} /></span>
+                    </div>
+                    <div className="text-xl font-extrabold text-amber-600">{inTransitPieces} <span className="text-xs font-normal text-slate-400">حبة</span></div>
+                  </div>
+
+                  <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-2xs flex flex-col justify-between">
+                    <div className="flex items-center justify-between text-slate-500 text-xs font-bold mb-1.5">
+                      <span>مستلم ومطابق بالمغسلة</span>
+                      <span className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg"><CheckCheck size={15} /></span>
+                    </div>
+                    <div className="text-xl font-extrabold text-emerald-600">{receivedPieces} <span className="text-xs font-normal text-slate-400">حبة</span></div>
+                  </div>
+                </div>
+
+                {/* Comprehensive Filters Bar */}
+                <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-2xs flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <Filter size={14} className="text-blue-600" />
+                      فلاتر تصفية الشحنات والعمليات
+                    </span>
+                    {(transferStatusFilter !== 'all' || transferWarehouseFilter !== 'all' || transferDateFrom || transferDateTo || transfersSearch) && (
+                      <button
+                        onClick={() => {
+                          setTransferStatusFilter('all');
+                          setTransferWarehouseFilter('all');
+                          setTransferDateFrom('');
+                          setTransferDateTo('');
+                          setTransfersSearch('');
+                        }}
+                        className="text-xs text-rose-600 hover:text-rose-800 font-bold flex items-center gap-1 cursor-pointer"
+                      >
+                        <RotateCw size={12} />
+                        إعادة ضبط الفلاتر
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                    {/* Search */}
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="ابحث برقم الشحنة، المستودع، الصنف..."
+                        value={transfersSearch}
+                        onChange={(e) => setTransfersSearch(e.target.value)}
+                        className="w-full pr-8 pl-8 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white"
+                      />
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                        <Search size={14} />
+                      </span>
+                      {transfersSearch && (
+                        <button
+                          onClick={() => setTransfersSearch('')}
+                          className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                        >
+                          <X size={13} />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Status Filter */}
+                    <div>
+                      <select
+                        value={transferStatusFilter}
+                        onChange={(e) => setTransferStatusFilter(e.target.value as any)}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white"
+                      >
+                        <option value="all">جميع الحالات التشغيلية</option>
+                        <option value="sent">تحت الشحن للمغسلة</option>
+                        <option value="received">مستلم ومطابق بالمغسلة</option>
+                        <option value="partially_received">مستلم مع عجز أو تلفيات</option>
+                      </select>
+                    </div>
+
+                    {/* Warehouse Filter */}
+                    <div>
+                      <select
+                        value={transferWarehouseFilter}
+                        onChange={(e) => setTransferWarehouseFilter(e.target.value)}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white"
+                      >
+                        <option value="all">جميع المستودعات والأقسام</option>
+                        {warehouses.map(w => (
+                          <option key={w.id} value={String(w.id)}>{w.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Date Filters */}
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="date"
+                        title="من تاريخ"
+                        value={transferDateFrom}
+                        onChange={(e) => setTransferDateFrom(e.target.value)}
+                        className="w-1/2 px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-bold text-slate-700 focus:outline-none focus:border-blue-500"
+                      />
+                      <span className="text-slate-400 text-xs">-</span>
+                      <input
+                        type="date"
+                        title="إلى تاريخ"
+                        value={transferDateTo}
+                        onChange={(e) => setTransferDateTo(e.target.value)}
+                        className="w-1/2 px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-bold text-slate-700 focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Operations Archive Table (Full Width) */}
+                <div className="border border-slate-200 rounded-xl overflow-hidden text-xs bg-white shadow-2xs">
+                  <table className="w-full text-right border-collapse">
+                    <thead className="bg-slate-50 border-b border-slate-100">
+                      <tr>
+                        <th className="px-4 py-3 font-bold text-slate-500">رقم الشحنة</th>
+                        <th className="px-4 py-3 font-bold text-slate-500">المستودع المصدر</th>
+                        <th className="px-4 py-3 font-bold text-slate-500">بيان الأصناف والكميات</th>
+                        <th className="px-4 py-3 text-center font-bold text-slate-500">إجمالي الكمية</th>
+                        <th className="px-4 py-3 text-center font-bold text-slate-500">تاريخ الإرسال</th>
+                        <th className="px-4 py-3 text-center font-bold text-slate-500">الحالة</th>
+                        <th className="px-4 py-3 text-center font-bold text-slate-500">إجراءات</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredTransfers.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="p-10 text-center text-slate-400">
+                            <div className="flex flex-col items-center justify-center gap-2">
+                              <Inbox size={32} className="text-slate-300" />
+                              <span className="font-bold">لا توجد شحنات مطابقة للفلاتر المحددة حالياً.</span>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setTransferStatusFilter('all');
+                                  setTransferWarehouseFilter('all');
+                                  setTransferDateFrom('');
+                                  setTransferDateTo('');
+                                  setTransfersSearch('');
+                                }}
+                                className="mt-1"
+                              >
+                                إظهار كل الشحنات
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredTransfers.map(t => {
+                          const isNew = (t.status === 'sent' || t.status === 'dispatched');
+                          const totalQty = (t.items || []).reduce((sum, i) => sum + i.sentQty, 0);
+                          return (
+                            <tr key={t.id} className={`transition-colors ${isNew ? 'bg-amber-50/70 border-r-4 border-r-amber-500 hover:bg-amber-100/50' : 'hover:bg-slate-50/60'}`}>
+                              <td className="px-4 py-3.5 font-mono font-bold text-slate-800">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-blue-700 font-black text-sm">#{t.id}</span>
+                                  {isNew && (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-amber-500 text-white shadow-2xs animate-pulse">
+                                      <Sparkles size={11} />
+                                      طلب جديد
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3.5 font-bold text-slate-800">{t.fromWarehouseName}</td>
+                              <td className="px-4 py-3.5">
+                                <div className="flex flex-wrap gap-1 max-w-md">
+                                  {(t.items || []).map((i, idx) => (
+                                    <span key={idx} className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 border border-slate-200/80 rounded-md text-[10px] text-slate-700 font-bold">
+                                      {i.itemNameAr}: <strong className="text-blue-700">{i.sentQty}</strong>
+                                    </span>
+                                  ))}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3.5 text-center text-slate-800 font-extrabold">{totalQty} حبة</td>
+                              <td className="px-4 py-3.5 text-center text-slate-500">{new Date(t.createdAt).toLocaleDateString('ar-EG')}</td>
+                              <td className="px-4 py-3.5 text-center">
+                                <Badge variant={
+                                  t.status === 'received' ? 'success' :
+                                  t.status === 'partially_received' ? 'info' :
+                                  isNew ? 'warning' : 'neutral'
+                                } className={isNew ? 'font-extrabold ring-1 ring-amber-400 gap-1 inline-flex items-center' : ''}>
+                                  {isNew && <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>}
+                                  {t.status === 'received' ? 'مستلم بالمغسلة' :
+                                   t.status === 'partially_received' ? 'مستلم مع عجز/تالف' :
+                                   isNew ? 'تحت الشحن للمغسلة (جديد)' : t.status}
+                                </Badge>
+                              </td>
+                              <td className="px-4 py-3.5 text-center">
+                                {(t.status === 'draft' || t.status === 'pending') && (
+                                  <button
+                                    onClick={() => handleSendTransfer(t.id)}
+                                    className="px-3.5 py-1.5 text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg cursor-pointer transition-all shadow-xs hover:shadow-md active:scale-95 inline-flex items-center gap-1.5"
+                                  >
+                                    <Send size={12} />
+                                    إرسال للمغسلة
+                                  </button>
+                                )}
+                                {isNew && (
+                                  canReceive ? (
+                                    <button
+                                      onClick={() => handleOpenReceiveModal(t)}
+                                      className="px-3.5 py-1.5 text-xs font-black text-white bg-blue-600 hover:bg-blue-700 rounded-lg cursor-pointer transition-all shadow-xs hover:shadow-md active:scale-95"
+                                    >
+                                      تأكيد الاستلام بالمغسلة
+                                    </button>
+                                  ) : (
+                                    <span className="text-[10px] text-slate-400 font-bold">بانتظار تأكيد المغسلة</span>
+                                  )
+                                )}
+                                {t.status === 'received' && (
+                                  <span className="text-[11px] text-emerald-600 font-bold flex items-center justify-center gap-1">
+                                    <CheckCircle size={14} />
+                                    مسجل ومطابق
+                                  </span>
+                                )}
+                                {t.status === 'partially_received' && (
+                                  <span className="text-[11px] text-amber-600 font-bold flex items-center justify-center gap-1">
+                                    <AlertTriangle size={14} />
+                                    مستلم مع عجز/تالف
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* TAB 3: LAUNDRY RETURNS & VERIFICATION */}
+          {activeTab === 'returns' && (() => {
+            const totalReturnsCount = returns.length;
+            const totalPiecesReturned = returns.reduce((sum, r) =>
+              sum + (r.items || []).reduce((iSum, i) => iSum + (Number(i.actualQty || i.expectedQty) || 0), 0), 0
+            );
+            const completedReturnsCount = returns.filter(r => r.status === 'completed').length;
+
+            const filteredReturns = returns.filter(r => {
+              if (returnStatusFilter !== 'all' && r.status !== returnStatusFilter) return false;
+              if (returnsSearch.trim()) {
+                const q = returnsSearch.toLowerCase().trim();
+                const matchesId = String(r.id).includes(q);
+                const matchesTransfer = String(r.transferId).includes(q);
+                const matchesUser = (r.creatorUsername || '').toLowerCase().includes(q);
+                const matchesItems = (r.items || []).some(i =>
+                  (i.itemNameAr || '').toLowerCase().includes(q) ||
+                  (i.itemCode || '').toLowerCase().includes(q)
+                );
+                if (!matchesId && !matchesTransfer && !matchesUser && !matchesItems) return false;
+              }
+              return true;
+            }).sort((a, b) => Number(b.id) - Number(a.id));
+
+            return (
+              <div className="flex flex-col gap-5">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                  <div>
+                    <h2 className="text-base lg:text-lg font-bold text-slate-800 flex items-center gap-2">
+                      <ClipboardCheck className="text-emerald-600" size={20} />
+                      مرتجعات البياضات النظيفة إلى مستودعات الفندق
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      تسجيل استلام البياضات المغسولة وإعادتها فورياً إلى الرصيد التشغيلي للمستودعات.
+                    </p>
+                  </div>
+                  {canManage && (
+                    <Button variant="primary" size="sm" onClick={() => setIsCreateReturnOpen(true)} className="flex-shrink-0 shadow-sm">
+                      <Plus size={16} />
                       تسجيل دفعة مرتجعات جديدة
                     </Button>
                   )}
                 </div>
-              </div>
 
-              <div className="border border-slate-200 rounded-xl overflow-hidden text-xs bg-white shadow-2xs">
-                <table className="w-full text-right border-collapse">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="px-5 py-3 font-bold text-slate-500">رقم المرتجع</th>
-                      <th className="px-5 py-3 font-bold text-slate-500">تابع لتحويل</th>
-                      <th className="px-5 py-3 font-bold text-slate-500">المسؤول</th>
-                      <th className="px-5 py-3 text-center font-bold text-slate-500">تاريخ الإرجاع</th>
-                      <th className="px-5 py-3 text-center font-bold text-slate-500">الحالة</th>
-                      <th className="px-5 py-3 text-center font-bold text-slate-500">إجراءات التحقق</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {returns.filter(r =>
-                      String(r.id).includes(returnsSearch) ||
-                      String(r.transferId).includes(returnsSearch) ||
-                      r.creatorUsername.toLowerCase().includes(returnsSearch.toLowerCase())
-                    ).length === 0 ? (
+                {/* KPI Metrics */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                  <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-2xs flex flex-col justify-between">
+                    <div className="flex items-center justify-between text-slate-500 text-xs font-bold mb-1.5">
+                      <span>إجمالي دفعات الإرجاع</span>
+                      <span className="p-1.5 bg-blue-50 text-blue-600 rounded-lg"><ClipboardCheck size={15} /></span>
+                    </div>
+                    <div className="text-xl font-extrabold text-slate-800">{totalReturnsCount} <span className="text-xs font-normal text-slate-400">دفعة</span></div>
+                  </div>
+
+                  <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-2xs flex flex-col justify-between">
+                    <div className="flex items-center justify-between text-slate-500 text-xs font-bold mb-1.5">
+                      <span>إجمالي البياضات المعادة للرصيد</span>
+                      <span className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg"><CheckCheck size={15} /></span>
+                    </div>
+                    <div className="text-xl font-extrabold text-emerald-600">{totalPiecesReturned} <span className="text-xs font-normal text-slate-400">حبة مضافة للمخزون</span></div>
+                  </div>
+
+                  <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-2xs flex flex-col justify-between">
+                    <div className="flex items-center justify-between text-slate-500 text-xs font-bold mb-1.5">
+                      <span>المرتجعات المعتمدة بالكامل</span>
+                      <span className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg"><CheckCircle size={15} /></span>
+                    </div>
+                    <div className="text-xl font-extrabold text-indigo-600">{completedReturnsCount} <span className="text-xs font-normal text-slate-400">مكتملة</span></div>
+                  </div>
+                </div>
+
+                {/* Filter Controls */}
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-2xs flex flex-col sm:flex-row gap-3 items-center justify-between">
+                  <div className="flex flex-1 flex-col sm:flex-row gap-3 w-full">
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        placeholder="ابحث برقم المرتجع أو التحويل أو المسؤول أو الصنف..."
+                        value={returnsSearch}
+                        onChange={(e) => setReturnsSearch(e.target.value)}
+                        className="w-full pr-8 pl-8 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white"
+                      />
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                        <Search size={14} />
+                      </span>
+                      {returnsSearch && (
+                        <button
+                          onClick={() => setReturnsSearch('')}
+                          className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                        >
+                          <X size={13} />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="w-full sm:w-56">
+                      <select
+                        value={returnStatusFilter}
+                        onChange={(e) => setReturnStatusFilter(e.target.value as any)}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white"
+                      >
+                        <option value="all">جميع الحالات</option>
+                        <option value="completed">معاد للرصيد ومكتمل</option>
+                        <option value="partial_received">استلام جزئي / فروقات</option>
+                        <option value="draft">بانتظار التحقق</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {(returnStatusFilter !== 'all' || returnsSearch) && (
+                    <button
+                      onClick={() => {
+                        setReturnStatusFilter('all');
+                        setReturnsSearch('');
+                      }}
+                      className="text-xs text-rose-600 hover:text-rose-800 font-bold flex items-center gap-1 cursor-pointer flex-shrink-0"
+                    >
+                      <RotateCw size={12} />
+                      إعادة ضبط
+                    </button>
+                  )}
+                </div>
+
+                <div className="border border-slate-200 rounded-xl overflow-hidden text-xs bg-white shadow-2xs">
+                  <table className="w-full text-right border-collapse">
+                    <thead className="bg-slate-50 border-b border-slate-100">
                       <tr>
-                        <td colSpan={6} className="p-8 text-center text-slate-400">لا توجد مستندات مرتجعات مطابقة للبحث.</td>
+                        <th className="px-5 py-3 font-bold text-slate-500">رقم المرتجع</th>
+                        <th className="px-5 py-3 font-bold text-slate-500">تابع لتحويل</th>
+                        <th className="px-5 py-3 font-bold text-slate-500">تفاصيل البياضات المرجعة</th>
+                        <th className="px-5 py-3 text-center font-bold text-slate-500">إجمالي الكمية</th>
+                        <th className="px-5 py-3 font-bold text-slate-500">المسؤول</th>
+                        <th className="px-5 py-3 text-center font-bold text-slate-500">تاريخ الإرجاع</th>
+                        <th className="px-5 py-3 text-center font-bold text-slate-500">الحالة</th>
+                        <th className="px-5 py-3 text-center font-bold text-slate-500">إجراءات</th>
                       </tr>
-                    ) : (
-                      returns.filter(r =>
-                        String(r.id).includes(returnsSearch) ||
-                        String(r.transferId).includes(returnsSearch) ||
-                        r.creatorUsername.toLowerCase().includes(returnsSearch.toLowerCase())
-                      ).map(r => (
-                        <tr key={r.id} className="hover:bg-slate-50/50">
-                          <td className="px-5 py-3.5 font-mono font-bold text-slate-500">#{r.id}</td>
-                          <td className="px-5 py-3.5 font-bold text-slate-650">تحويل #{r.transferId}</td>
-                          <td className="px-5 py-3.5 text-slate-700 font-medium">{r.creatorUsername}</td>
-                          <td className="px-5 py-3.5 text-center text-slate-450">{new Date(r.createdAt).toLocaleDateString('ar-EG')}</td>
-                          <td className="px-5 py-3.5 text-center">
-                            <Badge variant={
-                              r.status === 'completed' ? 'success' :
-                                r.status === 'draft' ? 'warning' :
-                                  r.status === 'partial_received' ? 'info' : 'danger'
-                            }>
-                              {
-                                r.status === 'completed' ? 'مكتمل ومعتمد' :
-                                  r.status === 'draft' ? 'مسودة بانتظار التحقق' :
-                                    r.status === 'partial_received' ? 'استلام جزئي' : r.status
-                              }
-                            </Badge>
-                          </td>
-                          <td className="px-5 py-3.5 text-center">
-                            {r.status === 'draft' && (
-                              canReceive ? (
-                                <button
-                                  onClick={() => handleOpenVerifyReturnModal(r)}
-                                  className="px-2.5 py-1 text-[10px] font-bold text-blue-600 hover:text-blue-800 border border-blue-200 rounded bg-blue-50/45 cursor-pointer"
-                                >
-                                  مطابقة واعتماد في الفندق
-                                </button>
-                              ) : (
-                                <span className="text-[10px] text-slate-400 font-bold">بانتظار التحقق</span>
-                              )
-                            )}
-                            {r.status === 'completed' && (
-                              <span className="text-[10px] text-emerald-600 font-bold flex items-center justify-center gap-1">
-                                <CheckCircle size={12} />
-                                تم الإغلاق والاعتماد
-                              </span>
-                            )}
-                            {r.status === 'partial_received' && (
-                              <span className="text-[10px] text-amber-600 font-bold flex items-center justify-center gap-1">
-                                <AlertTriangle size={12} />
-                                مغلق مع وجود فروقات
-                              </span>
-                            )}
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredReturns.length === 0 ? (
+                        <tr>
+                          <td colSpan={8} className="p-10 text-center text-slate-400">
+                            <div className="flex flex-col items-center justify-center gap-2">
+                              <Inbox size={32} className="text-slate-300" />
+                              <span className="font-bold">لا توجد مستندات مرتجعات مطابقة للفلاتر.</span>
+                            </div>
                           </td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                      ) : (
+                        filteredReturns.map(r => {
+                          const totalPieces = (r.items || []).reduce((sum, i) => sum + (Number(i.actualQty || i.expectedQty) || 0), 0);
+                          return (
+                            <tr key={r.id} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="px-5 py-3.5 font-mono font-bold text-slate-600">#{r.id}</td>
+                              <td className="px-5 py-3.5 font-bold text-slate-700">شحنة #{r.transferId}</td>
+                              <td className="px-5 py-3.5">
+                                <div className="flex flex-wrap gap-1 max-w-sm">
+                                  {(r.items || []).map((i, idx) => (
+                                    <span key={idx} className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 border border-emerald-200/70 rounded-md text-[10px] text-emerald-800 font-bold">
+                                      {i.itemNameAr}: {i.actualQty || i.expectedQty} حبة
+                                    </span>
+                                  ))}
+                                </div>
+                              </td>
+                              <td className="px-5 py-3.5 text-center text-slate-800 font-extrabold">{totalPieces} حبة</td>
+                              <td className="px-5 py-3.5 text-slate-700 font-medium">{r.creatorUsername}</td>
+                              <td className="px-5 py-3.5 text-center text-slate-450">{new Date(r.createdAt).toLocaleDateString('ar-EG')}</td>
+                              <td className="px-5 py-3.5 text-center">
+                                <Badge variant={
+                                  r.status === 'completed' ? 'success' :
+                                  r.status === 'draft' ? 'warning' :
+                                  r.status === 'partial_received' ? 'info' : 'danger'
+                                }>
+                                  {
+                                    r.status === 'completed' ? 'معاد للرصيد ومكتمل' :
+                                    r.status === 'draft' ? 'مسودة بانتظار التحقق' :
+                                    r.status === 'partial_received' ? 'استلام جزئي' : r.status
+                                  }
+                                </Badge>
+                              </td>
+                              <td className="px-5 py-3.5 text-center">
+                                {r.status === 'draft' && (
+                                  canReceive ? (
+                                    <button
+                                      onClick={() => handleOpenVerifyReturnModal(r)}
+                                      className="px-2.5 py-1 text-[10px] font-bold text-blue-600 hover:text-blue-800 border border-blue-200 rounded bg-blue-50/70 hover:bg-blue-100 cursor-pointer"
+                                    >
+                                      مطابقة واعتماد في الفندق
+                                    </button>
+                                  ) : (
+                                    <span className="text-[10px] text-slate-400 font-bold">بانتظار التحقق</span>
+                                  )
+                                )}
+                                {r.status === 'completed' && (
+                                  <span className="text-[11px] text-emerald-600 font-bold flex items-center justify-center gap-1">
+                                    <CheckCircle size={13} />
+                                    مضاف للرصيد
+                                  </span>
+                                )}
+                                {r.status === 'partial_received' && (
+                                  <span className="text-[11px] text-amber-600 font-bold flex items-center justify-center gap-1">
+                                    <AlertTriangle size={13} />
+                                    مغلق مع فروقات
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* TAB 4: SCRAP & LOSS LEDGER */}
           {activeTab === 'losses' && (
@@ -1068,8 +1499,8 @@ export default function ReportsReconciliation() {
                           onChange={(e) => setLossForm({ ...lossForm, itemCode: e.target.value })}
                           className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                         >
-                          {STANDARD_LINENS.map(l => (
-                            <option key={l.itemCode} value={l.itemCode}>{l.itemNameAr}</option>
+                          {STANDARD_LINENS.map((l, idx) => (
+                            <option key={`${l.itemCode}-${idx}`} value={l.itemCode}>{l.itemNameAr}</option>
                           ))}
                         </select>
                       </div>
@@ -1100,7 +1531,7 @@ export default function ReportsReconciliation() {
                       </div>
 
                       <Input
-                        label="تقدير التكلفة المالية للتعويض (ج.م)"
+                        label="تقدير التكلفة المالية للتعويض (جنيه)"
                         type="number"
                         min={0}
                         value={lossForm.cost}
@@ -1172,7 +1603,7 @@ export default function ReportsReconciliation() {
                                 }
                               </Badge>
                             </td>
-                            <td className="px-4 py-3 text-center text-slate-750 font-bold">{l.cost} ج.م</td>
+                            <td className="px-4 py-3 text-center text-slate-750 font-bold">{l.cost} جنيه</td>
                             <td className="px-4 py-3 text-center text-slate-500">{l.approverUsername}</td>
                             <td className="px-4 py-3 text-center text-slate-400">{new Date(l.createdAt).toLocaleDateString('ar-EG')}</td>
                           </tr>
@@ -1191,7 +1622,7 @@ export default function ReportsReconciliation() {
       {/* --- MODALS --- */}
 
       {/* 1. CREATE TRANSFER MODAL */}
-      <Modal isOpen={isCreateTransferOpen} onClose={() => setIsCreateTransferOpen(false)} title="إنشاء شحنة تحويل بياضات متسخة" size="md">
+      <Modal isOpen={isCreateTransferOpen} onClose={() => setIsCreateTransferOpen(false)} title="تحويل بياضات متسخة إلى المغسلة" size="md">
         <form onSubmit={handleCreateTransferSubmit} className="flex flex-col gap-4 font-arabic text-right dir-rtl">
 
           <div className="flex flex-col gap-1.5">
@@ -1244,6 +1675,22 @@ export default function ReportsReconciliation() {
           <div className="border-t border-slate-100 pt-3 flex flex-col gap-3">
             <span className="text-xs font-bold text-slate-750">إضافة البنود للشحنة:</span>
 
+            {/* Warehouse Stock Live Indicator */}
+            {transferForm.fromWarehouseId && (
+              <div className="flex items-center justify-between text-[11px] bg-blue-50/70 border border-blue-100 px-3 py-1.5 rounded-lg">
+                <span className="text-slate-600 font-bold">الرصيد المتاح بالمستودع المحدد:</span>
+                {loadingWarehouseStock ? (
+                  <span className="text-slate-400 font-bold animate-pulse">جاري فحص الرصيد...</span>
+                ) : (
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                    (warehouseStock[transferItemInput.itemCode] ?? 0) > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                  }`}>
+                    {warehouseStock[transferItemInput.itemCode] ?? 0} حبة متاحة بالمستودع
+                  </span>
+                )}
+              </div>
+            )}
+
             <div className="flex gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-200 items-end">
               <div className="flex-1 flex flex-col gap-1">
                 <span className="text-[10px] font-bold text-slate-500">اختر الصنف</span>
@@ -1279,8 +1726,8 @@ export default function ReportsReconciliation() {
                       l.itemNameAr.toLowerCase().includes(transferItemSearch.toLowerCase()) ||
                       l.itemCode.toLowerCase().includes(transferItemSearch.toLowerCase())
                     )
-                    .map(l => (
-                      <option key={l.itemCode} value={l.itemCode}>{l.itemNameAr}</option>
+                    .map((l, idx) => (
+                      <option key={`${l.itemCode}-${idx}`} value={l.itemCode}>{l.itemNameAr}</option>
                     ))}
                 </select>
               </div>
@@ -1292,7 +1739,7 @@ export default function ReportsReconciliation() {
                   min={1}
                   value={transferItemInput.sentQty}
                   onChange={(e) => setTransferItemInput({ ...transferItemInput, sentQty: Math.max(1, Number(e.target.value)) })}
-                  className="px-2 py-1.5 bg-white border border-slate-200 rounded text-xs text-center"
+                  className="px-2 py-1.5 bg-white border border-slate-200 rounded text-xs text-center font-bold"
                 />
               </div>
 
@@ -1306,15 +1753,15 @@ export default function ReportsReconciliation() {
               {transferForm.items.length === 0 ? (
                 <div className="p-3 text-center text-slate-400">لم يتم إدخال أصناف بعد.</div>
               ) : (
-                transferForm.items.map(item => (
-                  <div key={item.itemCode} className="flex justify-between items-center p-2">
+                transferForm.items.map((item, idx) => (
+                  <div key={`${item.itemCode}-${idx}`} className="flex justify-between items-center p-2">
                     <span className="font-bold text-slate-700">{item.itemNameAr}</span>
                     <div className="flex items-center gap-3">
                       <span className="font-bold text-blue-600">{item.sentQty} حبة</span>
                       <button
                         type="button"
                         onClick={() => handleRemoveTransferItem(item.itemCode)}
-                        className="text-rose-500 hover:text-rose-700"
+                        className="text-rose-500 hover:text-rose-700 cursor-pointer"
                       >
                         <Trash2 size={14} />
                       </button>
@@ -1327,7 +1774,10 @@ export default function ReportsReconciliation() {
 
           <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-slate-100">
             <Button type="button" variant="outline" onClick={() => setIsCreateTransferOpen(false)}>إلغاء</Button>
-            <Button type="submit" variant="primary" isLoading={submitting}>حفظ كمسودة تحويل</Button>
+            <Button type="submit" variant="primary" isLoading={submitting} className="flex items-center gap-1.5">
+              <Truck size={15} />
+              تأكيد وإرسال للمغسلة (خصم من المخزن)
+            </Button>
           </div>
         </form>
       </Modal>
@@ -1472,7 +1922,7 @@ export default function ReportsReconciliation() {
             >
               <option value="">-- اختر الشحنة المعلقة بالمغسلة --</option>
               {transfers
-                .filter(t => t.status === 'received' && (t.items || []).some(i => i.remainingQty > 0))
+                .filter(t => (t.status === 'received' || t.status === 'partially_received') && (t.items || []).some(i => (i.remainingQty ?? i.receivedQty ?? 0) > 0))
                 .filter(t =>
                   String(t.id).includes(transferSearch) ||
                   t.fromWarehouseName.toLowerCase().includes(transferSearch.toLowerCase())
@@ -1506,7 +1956,7 @@ export default function ReportsReconciliation() {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {returnForm.items.map((item, idx) => (
-                      <tr key={item.itemCode}>
+                      <tr key={`${item.itemCode}-${idx}`}>
                         <td className="px-3 py-2.5 font-bold text-slate-700">{item.itemNameAr}</td>
                         <td className="px-3 py-2.5 text-center font-bold text-amber-600">{item.maxRemaining} حبة</td>
                         <td className="px-3 py-2.5 text-center">
@@ -1535,7 +1985,10 @@ export default function ReportsReconciliation() {
 
           <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-slate-100">
             <Button type="button" variant="outline" onClick={() => setIsCreateReturnOpen(false)}>إلغاء</Button>
-            <Button type="submit" variant="primary" isLoading={submitting}>إنشاء مستند المرتجع النظيف</Button>
+            <Button type="submit" variant="primary" isLoading={submitting} className="flex items-center gap-1.5">
+              <CheckCircle size={15} />
+              تأكيد إرجاع البياضات وإعادتها للرصيد
+            </Button>
           </div>
         </form>
       </Modal>
@@ -1568,7 +2021,7 @@ export default function ReportsReconciliation() {
                     const hasDiff = Number(item.actualQty) < expectedQty;
 
                     return (
-                      <tr key={item.itemCode} className="hover:bg-slate-50/50">
+                      <tr key={`${item.itemCode}-${idx}`} className="hover:bg-slate-50/50">
                         <td className="px-3 py-2 font-bold text-slate-700">
                           {original ? original.itemNameAr : item.itemCode}
                         </td>

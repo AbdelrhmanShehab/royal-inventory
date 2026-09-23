@@ -19,6 +19,7 @@ import transfersApi from '../../api/transfers.api';
 import CreateTransferModal from '../../components/transfers/CreateTransferModal';
 import TransferDetailsModal from '../../components/transfers/TransferDetailsModal';
 import type { TransferStatus } from '../../types/transfer';
+import { useWarehouseScope } from '../../hooks/useWarehouseScope';
 
 const statusLabels: Record<TransferStatus, { text: string; variant: 'neutral' | 'warning' | 'info' | 'success' | 'danger' }> = {
   draft: { text: 'مسودة جارية', variant: 'neutral' },
@@ -39,6 +40,8 @@ const txnTypeLabels: Record<string, string> = {
 };
 
 export default function RequestsPage() {
+  const { currentNodeId, isGlobalAdmin, currentNodeName } = useWarehouseScope();
+
   // Modals state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedTransferId, setSelectedTransferId] = useState<number | string | null>(null);
@@ -64,12 +67,21 @@ export default function RequestsPage() {
 
   // React Query fetch transfers list from real backend
   const { data: transfers = [], isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['transfers'],
-    queryFn: () => transfersApi.listTransfers()
+    queryKey: ['transfers', currentNodeId, isGlobalAdmin],
+    queryFn: () => transfersApi.listTransfers(!isGlobalAdmin && currentNodeId ? currentNodeId : undefined)
   });
 
   // Client-side filtering
   const filteredTransfers = transfers.filter(item => {
+    // 1. Warehouse isolation scope check
+    if (!isGlobalAdmin && currentNodeId) {
+      const fromId = Number(item.fromNodeId);
+      const toId = Number(item.toNodeId);
+      if (fromId !== currentNodeId && toId !== currentNodeId) {
+        return false;
+      }
+    }
+
     const matchesStatus = filterStatus ? item.status === filterStatus : true;
     const matchesTxnType = filterTxnType ? item.txnType === filterTxnType : true;
     
@@ -103,7 +115,7 @@ export default function RequestsPage() {
               إدارة حركات المخزون وطلبات التحويل (ERP Transfers)
             </h1>
             <p className="text-xs text-slate-400 mt-1">
-              متابعة طلبات التموين والتحويلات بين مستودعات وفروع المؤسسة، وإجراء مسارات الاعتماد والشحن والاستلام
+              متابعة طلبات التموين والتحويلات — النطاق النشط: {currentNodeName}
             </p>
           </div>
           <div className="flex gap-2">

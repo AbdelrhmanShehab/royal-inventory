@@ -7,3 +7,22 @@ export interface Alert {
   timestamp: string;
   resolved: boolean;
 }
+
+export interface StockAlertItem {
+  id: string;
+  itemCode: string;
+  itemNameAr: string;
+  itemNameEn?: string;
+  category: string;
+  unit: string;
+  nodeId: string;
+  nodeName: string;
+  qtyOperational: number;
+  reorderLevel: number;
+  deficitQty: number;
+  suggestedReorderQty: number;
+  status: 'out_of_stock' | 'about_to_finish' | 'healthy';
+  severity: 'critical' | 'warning' | 'info';
+  timestamp: string;
+}
+

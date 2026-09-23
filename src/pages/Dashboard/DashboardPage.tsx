@@ -32,10 +32,22 @@ import type { TransferTransaction } from '../../types/transaction';
 import type { Warehouse } from '../../types/warehouse';
 
 import { useWarehouseScope } from '../../hooks/useWarehouseScope';
+import { useAuth } from '../../context/AuthContext';
 
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const { currentNodeId, isGlobalAdmin, currentNodeName } = useWarehouseScope();
+  const { user } = useAuth();
+  const { 
+    currentNodeId, 
+    isGlobalAdmin, 
+    currentNodeName, 
+    isParentScope, 
+    isFromNodeLocked,
+    assignedWarehouse,
+    childNodeIds
+  } = useWarehouseScope();
+
+  const currentUserName = user?.fullNameAr || user?.full_name_ar || user?.username || 'المستخدم الحالي';
 
   // States
   const [flatNodes, setFlatNodes] = useState<OrganizationNode[]>([]);
@@ -63,9 +75,9 @@ export default function DashboardPage() {
     unit: string;
     notes: string;
   }>({
-    unitId: '',
+    unitId: currentNodeId ? String(currentNodeId) : '',
     type: 'transfer',
-    creator: 'عبدالرحمن محمد',
+    creator: currentUserName,
     itemName: '',
     requiredQty: 10,
     unit: 'كجم',
@@ -75,9 +87,9 @@ export default function DashboardPage() {
   const [transferForm, setTransferForm] = useState({
     sku: '',
     quantity: 10,
-    fromUnitId: '',
+    fromUnitId: currentNodeId ? String(currentNodeId) : '',
     toUnitId: '',
-    handler: 'أحمد محمود',
+    handler: currentUserName,
     notes: ''
   });
 
@@ -110,7 +122,7 @@ export default function DashboardPage() {
 
       // 2. Fetch stock items (node-scoped or global)
       let stock: StockItem[] = [];
-      if (!isGlobalAdmin && currentNodeId) {
+      if (currentNodeId) {
         stock = await hierarchyApi.getNodeStock(currentNodeId);
       } else {
         stock = await hierarchyApi.getStock();
@@ -119,11 +131,8 @@ export default function DashboardPage() {
       const sumQty = stock.reduce((sum, i) => sum + (i.qty_operational || 0), 0);
       setTotalOperationalQty(sumQty);
 
-      // 3. Fetch live backend transfers
-      let transfers = await transferApi.getTransfers();
-      if (!isGlobalAdmin && currentNodeId) {
-        transfers = transfers.filter(t => Number(t.fromNodeId) === currentNodeId || Number(t.toNodeId) === currentNodeId);
-      }
+      // 3. Fetch live backend transfers (scoped to currentNodeId or user's authorized server scope)
+      let transfers = await transferApi.getTransfers(currentNodeId || undefined);
 
       setRequests(transfers.map(t => ({
         id: t.id,
@@ -152,23 +161,38 @@ export default function DashboardPage() {
         notes: (t as any).reason || undefined
       })));
 
-      // 5. Fetch low stock count
-      const alerts = await alertsApi.getAlerts();
+      // 5. Fetch low stock count for current warehouse owner scope
+      const scopedNodeId = !isGlobalAdmin && currentNodeId ? String(currentNodeId) : undefined;
+      const alerts = await alertsApi.getAlerts(scopedNodeId);
       setLowStockCount(alerts.length);
 
-      // 6. Fetch active warehouses count
-      const warehouses = await warehousesApi.getWarehouses();
-      setActiveWarehousesCount(warehouses.filter(w => w.status === 'active').length);
-      setWarehousesList(warehouses);
+      // 6. Fetch active operational warehouses for transactions
+      const { allWarehouses } = await warehousesApi.getOperationalWarehouses(true);
+      const operationalList = allWarehouses.filter(w => w.nodeType !== 'parent' && w.status === 'active');
+      
+      const scopedList = (!isGlobalAdmin && (assignedWarehouse?.groupId || currentNodeId))
+        ? operationalList.filter(w => 
+            (assignedWarehouse?.groupId && w.groupId === assignedWarehouse.groupId) ||
+            w.parentNodeId === currentNodeId || 
+            childNodeIds.includes(w.nodeId) ||
+            w.nodeId === currentNodeId
+          )
+        : operationalList;
 
-      // Default for transfer units using real warehouses
-      if (warehouses.length > 0) {
-        const defaultFrom = !isGlobalAdmin && currentNodeId ? String(currentNodeId) : warehouses[0].id;
+      const targetList = scopedList.length > 0 ? scopedList : operationalList;
+      setActiveWarehousesCount(targetList.length);
+      setWarehousesList(targetList);
+
+      // Default for transfer units using real operational child warehouses
+      if (targetList.length > 0) {
+        const defaultFrom = !isGlobalAdmin && currentNodeId && !isParentScope 
+          ? String(currentNodeId) 
+          : String(targetList[0].id);
         setRequestForm(prev => prev.unitId ? prev : { ...prev, unitId: defaultFrom });
         setTransferForm(prev => {
           const fromId = defaultFrom;
-          const toId = prev.toUnitId || (warehouses.find(w => String(w.id) !== defaultFrom)?.id || defaultFrom);
-          return { ...prev, fromUnitId: fromId, toUnitId: toId };
+          const toId = prev.toUnitId || (targetList.find(w => String(w.id) !== defaultFrom)?.id || defaultFrom);
+          return { ...prev, fromUnitId: fromId, toUnitId: String(toId) };
         });
       }
 
@@ -190,11 +214,17 @@ export default function DashboardPage() {
       setLoadingSourceItems(true);
       try {
         const stock = await hierarchyApi.getNodeStock(transferForm.fromUnitId);
-        setSourceNodeItems(stock || []);
-        if (stock && stock.length > 0) {
-          setTransferForm(prev => ({ ...prev, sku: stock[0].item_code }));
+        // Strictly filter only items with positive operational stock (> 0)
+        const available = (stock || []).filter(item => (item.qty_operational || 0) > 0);
+        setSourceNodeItems(available);
+        if (available.length > 0) {
+          setTransferForm(prev => ({ 
+            ...prev, 
+            sku: available[0].item_code,
+            quantity: Math.min(prev.quantity || 1, available[0].qty_operational || 1)
+          }));
         } else {
-          setTransferForm(prev => ({ ...prev, sku: '' }));
+          setTransferForm(prev => ({ ...prev, sku: '', quantity: 1 }));
         }
       } catch (err) {
         console.error('Error loading source node items:', err);
@@ -243,6 +273,17 @@ export default function DashboardPage() {
   const handleTransferSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!transferForm.sku) return;
+
+    const selectedStock = sourceNodeItems.find(i => i.item_code === transferForm.sku);
+    if (!selectedStock || (selectedStock.qty_operational || 0) <= 0) {
+      alert('الصنف المختار غير متوفر في رصيد المستودع المصدر (الرصيد 0)');
+      return;
+    }
+    if (Number(transferForm.quantity) > Number(selectedStock.qty_operational || 0)) {
+      alert(`الكمية المطلوبة (${transferForm.quantity}) تتجاوز الرصيد المتوفر بالمستودع (${selectedStock.qty_operational})`);
+      return;
+    }
+
     try {
       await transactionsApi.createTransfer({
         sku: transferForm.sku,
@@ -259,7 +300,7 @@ export default function DashboardPage() {
         setFormSuccessMessage('');
         setTransferForm(prev => ({
           ...prev,
-          quantity: 10,
+          quantity: 1,
           notes: ''
         }));
         loadData();
@@ -498,11 +539,23 @@ export default function DashboardPage() {
                 </select>
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-bold text-slate-700">الجهة الطالبة (القسم/المستودع)</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700">الجهة الطالبة (القسم/المستودع)</label>
+                  {isFromNodeLocked ? (
+                    <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                      🔒 مقفل ({currentNodeName || 'مستودعك المخصص'})
+                    </span>
+                  ) : isParentScope ? (
+                    <span className="text-[10px] text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+                      🏢 نطاق المنشأة: اختر المستودع الفرعي
+                    </span>
+                  ) : null}
+                </div>
                 <select
+                  disabled={isFromNodeLocked}
                   value={requestForm.unitId}
                   onChange={(e) => setRequestForm({ ...requestForm, unitId: e.target.value })}
-                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-700 disabled:cursor-not-allowed"
                 >
                   {warehousesList.map(w => (
                     <option key={w.id} value={w.id}>{w.name}</option>
@@ -572,11 +625,23 @@ export default function DashboardPage() {
           <form onSubmit={handleTransferSubmit} className="flex flex-col gap-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-bold text-slate-700">من وحدة (المصدر)</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700">من وحدة (المصدر)</label>
+                  {isFromNodeLocked ? (
+                    <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                      🔒 مقفل ({currentNodeName || 'مستودعك المخصص'})
+                    </span>
+                  ) : isParentScope ? (
+                    <span className="text-[10px] text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+                      🏢 نطاق المنشأة: اختر المستودع الفرعي المصدر
+                    </span>
+                  ) : null}
+                </div>
                 <select
+                  disabled={isFromNodeLocked}
                   value={transferForm.fromUnitId}
                   onChange={(e) => setTransferForm({ ...transferForm, fromUnitId: e.target.value })}
-                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-700 disabled:cursor-not-allowed"
                 >
                   {warehousesList.map(w => (
                     <option key={w.id} value={w.id}>{w.name}</option>
@@ -606,18 +671,27 @@ export default function DashboardPage() {
                   جاري تحميل أصناف الوحدة المصدر...
                 </div>
               ) : sourceNodeItems.length === 0 ? (
-                <div className="py-2 px-3 bg-red-50 border border-red-100 rounded-lg text-xs text-red-600">
-                  لا توجد أصناف متوفرة في الوحدة المصدر المختارة!
+                <div className="py-2.5 px-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 font-bold">
+                  ⚠️ لا توجد أصناف ذات رصيد متاح (&gt; 0) في هذا المستودع حالياً لنقلها
                 </div>
               ) : (
                 <select
                   value={transferForm.sku}
-                  onChange={(e) => setTransferForm({ ...transferForm, sku: e.target.value })}
-                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  onChange={(e) => {
+                    const newSku = e.target.value;
+                    const stockItem = sourceNodeItems.find(i => i.item_code === newSku);
+                    const maxQty = stockItem?.qty_operational || 1;
+                    setTransferForm({ 
+                      ...transferForm, 
+                      sku: newSku,
+                      quantity: Math.min(transferForm.quantity || 1, maxQty)
+                    });
+                  }}
+                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-semibold"
                 >
-                  {sourceNodeItems.map(item => (
-                    <option key={item.item_code} value={item.item_code}>
-                      {item.item_name_ar} ({item.item_code}) - متاح: {item.qty_operational} {item.unit || 'وحدة'}
+                  {sourceNodeItems.map((item, idx) => (
+                    <option key={`${item.item_code}-${idx}`} value={item.item_code}>
+                      {item.item_name_ar} ({item.item_code}) — متاح: {item.qty_operational} {item.unit || 'وحدة'}
                     </option>
                   ))}
                 </select>
@@ -626,9 +700,10 @@ export default function DashboardPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <Input
-                label="الكمية المحولة"
+                label={`الكمية المحولة (الحد الأقصى المتاح: ${sourceNodeItems.find(i => i.item_code === transferForm.sku)?.qty_operational || 0})`}
                 type="number"
                 min={1}
+                max={sourceNodeItems.find(i => i.item_code === transferForm.sku)?.qty_operational || 1}
                 required
                 disabled={sourceNodeItems.length === 0}
                 value={transferForm.quantity}

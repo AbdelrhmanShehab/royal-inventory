@@ -122,8 +122,8 @@ export default function LaundryDashboard() {
           { label: 'غسالات خاملة (جاهزة)', value: idleCount, subtitle: 'بانتظار التحميل', icon: WashingMachine, color: 'text-emerald-600 bg-emerald-50 border-emerald-100' },
           { label: 'دورات اليوم الكلية', value: dashboardStats?.batches?.totalRuns || 0, subtitle: `${dashboardStats?.batches?.totalPieces || 0} قطعة ملابس`, icon: Activity, color: 'text-purple-600 bg-purple-50 border-purple-100' },
           { label: 'وزن التشغيل اليومي', value: `${dashboardStats?.batches?.totalWeightKg || 0} كجم`, subtitle: 'متوسط الحمولة 85%', icon: Layers, color: 'text-indigo-600 bg-indigo-50 border-indigo-100' },
-          { label: 'تكلفة الكيماويات اليوم', value: `${(dashboardStats?.batches?.totalChemicalCost || 0).toLocaleString()} ج.م`, subtitle: 'شامل الصابون والمطهرات', icon: DollarSign, color: 'text-rose-600 bg-rose-50 border-rose-100' },
-          { label: 'إجمالي إيرادات اليوم', value: `${(dashboardStats?.revenue?.totalRevenue || 0).toLocaleString()} ج.م`, subtitle: `من ${dashboardStats?.revenue?.totalTickets || 0} تذكرة POS`, icon: TrendingUp, color: 'text-amber-600 bg-amber-50 border-amber-100' },
+          { label: 'تكلفة الكيماويات اليوم', value: `${(dashboardStats?.batches?.totalChemicalCost || 0).toLocaleString()} جنيه`, subtitle: 'شامل الصابون والمطهرات', icon: DollarSign, color: 'text-rose-600 bg-rose-50 border-rose-100' },
+          { label: 'إجمالي إيرادات اليوم', value: `${(dashboardStats?.revenue?.totalRevenue || 0).toLocaleString()} جنيه`, subtitle: `من ${dashboardStats?.revenue?.totalTickets || 0} تذكرة POS`, icon: TrendingUp, color: 'text-amber-600 bg-amber-50 border-amber-100' },
         ].map((kpi, idx) => (
           <Card key={idx} className="border-slate-200/60 shadow-2xs hover:shadow-xs transition-shadow">
             <Card.Body className="p-4 flex flex-col justify-between h-full gap-3">
@@ -182,30 +182,34 @@ export default function LaundryDashboard() {
               let timeRemaining = '00:00';
 
               if (activeBatch) {
-                // If running, determine current cycle stages based on active batch time or mock
-                const elapsedMins = activeBatch.startedAt 
-                  ? Math.floor((Date.now() - new Date(activeBatch.startedAt).getTime()) / 60000) 
-                  : 10;
-                const duration = activeBatch.programId ? 45 : 30; // default mins
-                progressPercent = Math.min(Math.round((elapsedMins / duration) * 100), 99);
-                tempC = activeBatch.status === 'Paused' ? 25 : 55;
+                if (activeBatch.startedAt) {
+                  const elapsedMins = Math.max(0, Math.floor((Date.now() - new Date(activeBatch.startedAt).getTime()) / 60000));
+                  const duration = (activeBatch as any).durationMins || 45;
+                  progressPercent = Math.min(Math.round((elapsedMins / duration) * 100), 99);
+                  tempC = activeBatch.status === 'Paused' ? 25 : 60;
 
-                if (progressPercent < 15) {
-                  stageText = 'تجهيز وضخ المياه';
-                } else if (progressPercent < 40) {
-                  stageText = 'حقن كيميائي وغسيل رئيسي';
-                } else if (progressPercent < 70) {
-                  stageText = 'شطف وتصريف';
+                  if (progressPercent < 15) {
+                    stageText = 'تجهيز وضخ المياه';
+                  } else if (progressPercent < 40) {
+                    stageText = 'حقن كيميائي وغسيل رئيسي';
+                  } else if (progressPercent < 70) {
+                    stageText = 'شطف وتصريف';
+                  } else {
+                    stageText = 'عصر سريع وتجفيف';
+                  }
+
+                  if (activeBatch.status === 'Paused') {
+                    stageText = 'متوقف مؤقتاً';
+                  }
+
+                  const remainMins = Math.max(duration - elapsedMins, 0);
+                  timeRemaining = `${remainMins.toString().padStart(2, '0')}:00`;
                 } else {
-                  stageText = 'عصر سريع وتجفيف';
+                  progressPercent = 0;
+                  tempC = 0;
+                  stageText = activeBatch.status === 'Pending' ? 'في الانتظار' : 'قيد التشغيل';
+                  timeRemaining = '--:--';
                 }
-
-                if (activeBatch.status === 'Paused') {
-                  stageText = 'متوقف مؤقتاً';
-                }
-
-                const remainMins = Math.max(duration - elapsedMins, 1);
-                timeRemaining = `${remainMins.toString().padStart(2, '0')}:00`;
               }
 
               return (

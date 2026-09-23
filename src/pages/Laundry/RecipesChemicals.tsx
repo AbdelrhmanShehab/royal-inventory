@@ -356,8 +356,8 @@ export default function RecipesChemicals() {
                           <td colSpan={5} className="p-8 text-center text-slate-400">لا توجد مواد كيميائية مطابقة للبحث.</td>
                         </tr>
                       ) : (
-                        currentChemicals.map(chem => (
-                          <tr key={chem.itemCode} className="hover:bg-slate-50/50">
+                        currentChemicals.map((chem, idx) => (
+                          <tr key={`${chem.itemCode}-${idx}`} className="hover:bg-slate-50/50">
                             <td className="px-5 py-3 font-mono font-semibold text-slate-500">{chem.itemCode}</td>
                             <td className="px-5 py-3 font-bold text-slate-700">{chem.itemNameAr}</td>
                             <td className="px-5 py-3 text-slate-500">{chem.itemNameEn}</td>
@@ -496,8 +496,8 @@ export default function RecipesChemicals() {
                       (c.itemNameAr || '').toLowerCase().includes(modalChemicalSearch.toLowerCase()) ||
                       c.itemCode.toLowerCase().includes(modalChemicalSearch.toLowerCase())
                     )
-                    .map(c => (
-                      <option key={c.itemCode} value={c.itemCode}>{c.itemNameAr}</option>
+                    .map((c, idx) => (
+                      <option key={`${c.itemCode}-${idx}`} value={c.itemCode}>{c.itemNameAr}</option>
                     ))}
                 </select>
               </div>

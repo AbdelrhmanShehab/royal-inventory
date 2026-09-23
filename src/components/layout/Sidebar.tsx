@@ -14,9 +14,7 @@ import {
   Activity,
   FlaskConical,
   BarChart3,
-  Settings,
-  ArrowDownLeft,
-  ArrowUpRight
+  Settings
 } from 'lucide-react';
 import { ROUTES } from '../../utils/constants';
 import { useAuth } from '../../context/AuthContext';
@@ -29,10 +27,8 @@ export const Sidebar: React.FC = () => {
   const warehouseMenuItems = [
     { name: 'لوحة التحكم', path: ROUTES.DASHBOARD, icon: LayoutDashboard },
     { name: 'المخزون التشغيلي', path: ROUTES.INVENTORY, icon: Package },
-    { name: 'التحويلات الواردة', path: '/transfers/incoming', icon: ArrowDownLeft },
-    { name: 'التحويلات الصادرة', path: '/transfers/outgoing', icon: ArrowUpRight },
-    { name: 'سجل الحركات الشامل', path: ROUTES.TRANSACTIONS, icon: ArrowLeftRight },
-    { name: 'طلبات التموين والعهدة', path: ROUTES.REQUESTS, icon: ClipboardList },
+    { name: 'التحويلات الواردة والصادرة', path: ROUTES.REQUESTS, icon: ArrowLeftRight },
+    { name: 'سجل الحركات الشامل', path: ROUTES.TRANSACTIONS, icon: ClipboardList },
     { name: 'تقارير ونواقص المستودع', path: '/alerts', icon: AlertTriangle, permission: 'view_reports' },
     { name: 'الهيكل التنظيمي', path: ROUTES.ORGANIZATION, icon: FolderTree, permission: 'view_all_nodes' },
     { name: 'إدارة جميع المستودعات', path: '/warehouses', icon: Warehouse, permission: 'manage_nodes' },
@@ -41,12 +37,12 @@ export const Sidebar: React.FC = () => {
   ];
 
   const laundryMenuItems = [
-    { name: 'لوحة تحكم المغسلة', path: '/laundry', icon: LayoutDashboard },
-    { name: 'دورات الغسيل التشغيلية', path: '/laundry/batches', icon: Activity },
-    { name: 'الغسالات والمعدات', path: '/laundry/machines', icon: WashingMachine },
-    { name: 'الوصفات والكيماويات', path: '/laundry/recipes', icon: FlaskConical },
-    { name: 'التقارير والمطابقة', path: '/laundry/reports', icon: BarChart3 },
-    { name: 'إعدادات المزامنة', path: '/laundry/settings', icon: Settings },
+    { name: 'لوحة تحكم المغسلة', path: '/laundry', icon: LayoutDashboard, permission: 'view_laundry' },
+    { name: 'دورات الغسيل التشغيلية', path: '/laundry/batches', icon: Activity, permission: 'view_laundry' },
+    { name: 'الغسالات والمعدات', path: '/laundry/machines', icon: WashingMachine, permission: 'view_laundry' },
+    { name: 'الوصفات والكيماويات', path: '/laundry/recipes', icon: FlaskConical, permission: 'view_laundry' },
+    { name: 'التقارير والمطابقة', path: '/laundry/reports', icon: BarChart3, permission: 'view_laundry' },
+    { name: 'إعدادات المزامنة', path: '/laundry/settings', icon: Settings, permission: 'manage_laundry_operations' },
   ];
 
   const menuItems = isLaundryMode ? laundryMenuItems : warehouseMenuItems;
@@ -102,22 +98,25 @@ export const Sidebar: React.FC = () => {
 
       {/* Navigation List */}
       <nav className="flex-1 px-4 py-6 flex flex-col gap-1 overflow-y-auto">
-        {filteredMenuItems.map((item) => (
-          <NavLink
-            key={item.path}
-            to={item.path}
-            end={item.path === '/laundry' || item.path === '/'}
-            className={({ isActive }) => `
-              flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group cursor-pointer
-              ${isActive 
-                ? 'bg-blue-50 text-blue-600 font-bold border-r-4 border-blue-600 rounded-r-none' 
-                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}
-            `}
-          >
-            <item.icon size={18} className="transition-transform group-hover:scale-105" />
-            <span>{item.name}</span>
-          </NavLink>
-        ))}
+        {filteredMenuItems.map((item) => {
+          const isTransferRoute = item.path === ROUTES.REQUESTS && (location.pathname === ROUTES.REQUESTS || location.pathname.startsWith('/transfers'));
+          return (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              end={item.path === '/laundry' || item.path === '/'}
+              className={({ isActive }) => `
+                flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group cursor-pointer
+                ${(isActive || isTransferRoute) 
+                  ? 'bg-blue-50 text-blue-600 font-bold border-r-4 border-blue-600 rounded-r-none' 
+                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}
+              `}
+            >
+              <item.icon size={18} className="transition-transform group-hover:scale-105" />
+              <span>{item.name}</span>
+            </NavLink>
+          );
+        })}
       </nav>
 
       {/* Bottom info */}

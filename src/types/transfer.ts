@@ -1,5 +1,6 @@
 export type TxnType = 
   | 'internal_transfer' 
+  | 'laundry'
   | 'consumption' 
   | 'return' 
   | 'damage' 
@@ -76,6 +77,7 @@ export interface MasterItem {
   unitNameAr?: string;
   itemType?: string;
   avgCost?: number;
+  availableQty?: number;
   division?: string;
   isActive?: boolean;
 }

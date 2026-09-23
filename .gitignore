@@ -23,3 +23,7 @@ dist-ssr
 *.sln
 *.sw?
 *.env
+
+# Deployment builds
+deploy/
+tools/bin/

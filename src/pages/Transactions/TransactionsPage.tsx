@@ -2,55 +2,31 @@ import { useState, useEffect } from 'react';
 import {
   History,
   ArrowUpDown,
-  Download,
-  PlusCircle,
-  CheckCircle2
+  Download
 } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Loader from '../../components/ui/Loader';
 import EmptyState from '../../components/ui/EmptyState';
-import Modal from '../../components/ui/Modal';
-import Input from '../../components/ui/Input';
 import PermissionGate from '../../components/auth/PermissionGate';
 import { transactionsApi } from '../../api/transactions.api';
 import { hierarchyApi } from '../../api/hierarchy.api';
-import { transferApi } from '../../features/transfer/api/transfer.api';
 import CreateTransferDialog from '../../features/transfer/dialogs/CreateTransferDialog';
 import TransferDetailsDialog from '../../features/transfer/dialogs/TransferDetailsDialog';
 import { warehousesApi } from '../../api/warehouses.api';
+import { useWarehouseScope } from '../../hooks/useWarehouseScope';
 import type { TransferTransaction } from '../../types/transaction';
 import type { OrganizationNode } from '../../types/hierarchy';
-import type { Warehouse } from '../../types/warehouse';
 
 export default function TransactionsPage() {
+  const { currentNodeId, isGlobalAdmin, currentNodeName } = useWarehouseScope();
   const [transactions, setTransactions] = useState<TransferTransaction[]>([]);
   const [nodes, setNodes] = useState<OrganizationNode[]>([]);
-  const [warehousesList, setWarehousesList] = useState<Warehouse[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTx, setSelectedTx] = useState<TransferTransaction | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
-  const [formSuccessMessage, setFormSuccessMessage] = useState('');
-
-  const [requestForm, setRequestForm] = useState<{
-    unitId: string;
-    type: 'transfer' | 'consumption' | 'return' | 'damage' | 'waste' | 'disposal';
-    creator: string;
-    itemName: string;
-    requiredQty: number;
-    unit: string;
-    notes: string;
-  }>({
-    unitId: '',
-    type: 'transfer',
-    creator: 'عبدالرحمن محمد',
-    itemName: '',
-    requiredQty: 10,
-    unit: 'كجم',
-    notes: ''
-  });
 
   // Filters State
   const [filterType, setFilterType] = useState('');
@@ -81,17 +57,13 @@ export default function TransactionsPage() {
   // Load Data
   const loadData = async () => {
     try {
-      const txs = await transactionsApi.getTransfers();
+      const txs = await transactionsApi.getTransfers(!isGlobalAdmin && currentNodeId ? { nodeId: currentNodeId } : undefined);
       setTransactions(txs || []);
       const tree = await hierarchyApi.getTree();
       const flat = flattenNodes(tree);
       setNodes(flat);
 
-      const warehouses = await warehousesApi.getWarehouses();
-      setWarehousesList(warehouses);
-      if (warehouses.length > 0) {
-        setRequestForm(prev => prev.unitId ? prev : { ...prev, unitId: warehouses[0].id });
-      }
+      await warehousesApi.getWarehouses();
     } catch (err) {
       console.error('Error loading transactions data:', err);
     } finally {
@@ -101,40 +73,7 @@ export default function TransactionsPage() {
 
   useEffect(() => {
     loadData();
-  }, []);
-
-  const handleRequestSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await transferApi.createTransferDraft({
-        txnType: requestForm.type as any,
-        fromNodeId: Number(requestForm.unitId.replace(/\D/g, '')) || 11,
-        reason: 'طلب مخزني من صفحة الحركات',
-        lines: [
-          {
-            itemCode: 'ITEM-' + Date.now(),
-            quantity: Number(requestForm.requiredQty),
-            unitCode: requestForm.unit
-          }
-        ]
-      });
-
-      setFormSuccessMessage('تم تقديم الطلب بنجاح!');
-      setTimeout(() => {
-        setIsRequestModalOpen(false);
-        setFormSuccessMessage('');
-        setRequestForm(prev => ({
-          ...prev,
-          itemName: '',
-          requiredQty: 10,
-          notes: ''
-        }));
-        loadData();
-      }, 1500);
-    } catch (error) {
-      console.error(error);
-    }
-  };
+  }, [currentNodeId, isGlobalAdmin]);
 
   // Map node ID to name helper
   const getNodeName = (nodeId?: number | string) => {
@@ -145,7 +84,18 @@ export default function TransactionsPage() {
 
   // Filter logic
   const filteredTxs = transactions.filter(tx => {
-    const matchesType = filterType ? tx.txnType === filterType : true;
+    // 1. Warehouse isolation scope
+    if (!isGlobalAdmin && currentNodeId) {
+      const fromId = Number(tx.fromNodeId);
+      const toId = Number(tx.toNodeId);
+      if (fromId !== currentNodeId && toId !== currentNodeId) {
+        return false;
+      }
+    }
+
+    const matchesType = filterType
+      ? (filterType === 'laundry' ? (tx.txnType === 'laundry' || Number(tx.toNodeId) === 29 || tx.toNodeName?.includes('مغسلة')) : (tx.txnType === filterType || (filterType === 'transfer' && tx.txnType === 'internal_transfer')))
+      : true;
 
     const fromName = getNodeName(tx.fromNodeId);
     const toName = getNodeName(tx.toNodeId);
@@ -204,6 +154,8 @@ export default function TransactionsPage() {
 
   const txTypeNames: Record<string, string> = {
     transfer: 'تحويل داخلي',
+    internal_transfer: 'تحويل بين مستودعات',
+    laundry: 'مغسلة',
     consumption: 'استهلاك قسم',
     return: 'مرتجع مستودع',
     damage: 'تلفيات',
@@ -217,21 +169,20 @@ export default function TransactionsPage() {
       {/* Filters Area */}
       <div className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-xs select-none">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-          <h1 className="text-base font-bold text-slate-800 flex items-center gap-2">
-            <History size={18} className="text-blue-600" />
-            تتبع الحركات والتحويلات المخزنية
-          </h1>
+          <div>
+            <h1 className="text-base font-bold text-slate-800 flex items-center gap-2">
+              <History size={18} className="text-blue-600" />
+              تتبع الحركات والتحويلات المخزنية
+            </h1>
+            <p className="text-xs text-slate-400 mt-1">
+              تتبع وتوثيق جميع الحركات والتحويلات — النطاق النشط: {currentNodeName}
+            </p>
+          </div>
           <div className="flex gap-2">
             <PermissionGate permission="view_reports">
               <Button variant="outline" size="sm" onClick={handleExport} disabled={filteredTxs.length === 0}>
                 <Download size={14} />
                 تصدير تقرير الحركات
-              </Button>
-            </PermissionGate>
-            <PermissionGate permission="create_draft">
-              <Button variant="primary" size="sm" onClick={() => setIsRequestModalOpen(true)}>
-                <PlusCircle size={14} />
-                إنشاء طلب مخزني
               </Button>
             </PermissionGate>
           </div>
@@ -248,6 +199,7 @@ export default function TransactionsPage() {
             >
               <option value="">الكل</option>
               <option value="transfer">تحويل داخلي</option>
+              <option value="laundry">مغسلة (Laundry)</option>
               <option value="consumption">استهلاك قسم</option>
               <option value="return">مرتجع مستودع</option>
               <option value="damage">تلفيات</option>
@@ -284,10 +236,13 @@ export default function TransactionsPage() {
               onChange={(e) => { setFilterStatus(e.target.value); setCurrentPage(1); }}
               className="px-3.5 py-1.5 bg-slate-50 border border-slate-200 text-xs rounded-lg text-slate-700 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             >
-              <option value="">الكل</option>
-              <option value="completed">مكتمل</option>
-              <option value="pending">معلق</option>
-              <option value="cancelled">ملغي</option>
+              <option value="">جميع الحالات</option>
+              <option value="draft">مسودة (Draft)</option>
+              <option value="pending_approval">بانتظار الاعتماد (Pending Approval)</option>
+              <option value="approved">معتمد (Approved)</option>
+              <option value="shipped">قيد التوصيل (Shipped)</option>
+              <option value="confirmed">مكتمل ومؤكد (Confirmed)</option>
+              <option value="cancelled">ملغي (Cancelled)</option>
             </select>
           </div>
         </div>
@@ -351,9 +306,20 @@ export default function TransactionsPage() {
                         <td className="px-6 py-4 text-xs text-slate-600 font-semibold">{tx.createdBy}</td>
                         <td className="px-6 py-4 text-xs text-slate-400 font-bold">{tx.createdAt}</td>
                         <td className="px-6 py-4 text-xs">
-                          <Badge variant={tx.status === 'completed' ? 'success' : tx.status === 'pending' ? 'warning' : 'danger'}>
-                            {tx.status === 'completed' ? 'مكتمل' : tx.status === 'pending' ? 'معلق' : 'ملغي'}
-                          </Badge>
+                          {(() => {
+                            const statusMap: Record<string, { label: string; variant: 'neutral' | 'warning' | 'info' | 'success' | 'danger' }> = {
+                              draft: { label: 'مسودة', variant: 'neutral' },
+                              pending_approval: { label: 'بانتظار الاعتماد', variant: 'warning' },
+                              pending: { label: 'بانتظار الاعتماد', variant: 'warning' },
+                              approved: { label: 'معتمد', variant: 'info' },
+                              shipped: { label: 'قيد التوصيل', variant: 'info' },
+                              confirmed: { label: 'مكتمل ومؤكد', variant: 'success' },
+                              completed: { label: 'مكتمل', variant: 'success' },
+                              cancelled: { label: 'ملغي', variant: 'danger' }
+                            };
+                            const statusInfo = statusMap[tx.status] || { label: tx.status || 'مسودة', variant: 'neutral' };
+                            return <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>;
+                          })()}
                         </td>
                       </tr>
                     );
@@ -417,93 +383,7 @@ export default function TransactionsPage() {
         }}
       />
 
-      <Modal isOpen={isRequestModalOpen} onClose={() => setIsRequestModalOpen(false)} title="تقديم طلب مخزني جديد">
-        {formSuccessMessage ? (
-          <div className="flex flex-col items-center justify-center py-6 text-center gap-3">
-            <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center border border-emerald-100">
-              <CheckCircle2 size={24} />
-            </div>
-            <p className="text-sm font-bold text-slate-800">{formSuccessMessage}</p>
-          </div>
-        ) : (
-          <form onSubmit={handleRequestSubmit} className="flex flex-col gap-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-bold text-slate-700">نوع الطلب</label>
-                <select
-                  value={requestForm.type}
-                  onChange={(e) => setRequestForm({ ...requestForm, type: e.target.value as any })}
-                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                >
-                  <option value="transfer">تحويل داخلي</option>
-                  <option value="consumption">استهلاك قسم</option>
-                  <option value="return">مرتجع مستودع</option>
-                  <option value="damage">تلفيات</option>
-                  <option value="waste">هالك هدر</option>
-                  <option value="disposal">إعدام مواد</option>
-                </select>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-bold text-slate-700">الجهة الطالبة (القسم/المستودع)</label>
-                <select
-                  value={requestForm.unitId}
-                  onChange={(e) => setRequestForm({ ...requestForm, unitId: e.target.value })}
-                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                >
-                  {warehousesList.map(w => (
-                    <option key={w.id} value={w.id}>{w.name}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
 
-            <Input
-              label="اسم الصنف المطلوب"
-              placeholder="مثال: بن هرري محمص فاخر"
-              required
-              value={requestForm.itemName}
-              onChange={(e) => setRequestForm({ ...requestForm, itemName: e.target.value })}
-            />
-
-            <div className="grid grid-cols-2 gap-4">
-              <Input
-                label="الكمية المطلوبة"
-                type="number"
-                min={1}
-                required
-                value={requestForm.requiredQty}
-                onChange={(e) => setRequestForm({ ...requestForm, requiredQty: Number(e.target.value) })}
-              />
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-bold text-slate-700">وحدة القياس</label>
-                <select
-                  value={requestForm.unit}
-                  onChange={(e) => setRequestForm({ ...requestForm, unit: e.target.value })}
-                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                >
-                  <option value="كجم">كجم</option>
-                  <option value="لتر">لتر</option>
-                  <option value="حبة">حبة</option>
-                  <option value="كرتون">كرتون</option>
-                  <option value="جالون">جالون</option>
-                </select>
-              </div>
-            </div>
-
-            <Input
-              label="اسم مقدم الطلب"
-              required
-              value={requestForm.creator}
-              onChange={(e) => setRequestForm({ ...requestForm, creator: e.target.value })}
-            />
-
-            <div className="flex justify-end gap-2 mt-4">
-              <Button type="button" variant="outline" onClick={() => setIsRequestModalOpen(false)}>إلغاء</Button>
-              <Button type="submit" variant="primary">تقديم الطلب</Button>
-            </div>
-          </form>
-        )}
-      </Modal>
 
       {/* ENTERPRISE ERP TRANSFER DIALOGS */}
       <CreateTransferDialog

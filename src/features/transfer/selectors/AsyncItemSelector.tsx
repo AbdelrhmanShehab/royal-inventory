@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Search, Loader2, Package, Check, Tag } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { masterDataApi } from '../../../api/masterData.api';
 import { hierarchyApi } from '../../../api/hierarchy.api';
 import type { MasterItem } from '../../../types/transfer';
 
@@ -44,7 +43,7 @@ export const AsyncItemSelector: React.FC<AsyncItemSelectorProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const effectivePlaceholder = placeholder || (nodeId ? 'ابحث برقم الصنف، الاسم بالعربي/الإنجليزي...' : 'يرجى اختيار مستودع المصدر أولاً...');
+  const effectivePlaceholder = placeholder || (nodeId ? 'ابحث برقم الصنف أو الاسم بالعربي/الإنجليزي...' : 'يرجى اختيار مستودع المصدر أولاً لعرض الأصناف المتوفرة به...');
 
   // Debounce search query (250ms)
   useEffect(() => {
@@ -54,32 +53,37 @@ export const AsyncItemSelector: React.FC<AsyncItemSelectorProps> = ({
     return () => clearTimeout(handler);
   }, [searchTerm]);
 
-  // Fetch node-specific stock items if nodeId is provided, otherwise fall back to master items
+  // Fetch node-specific stock items if nodeId is provided. Strictly ONLY items with positive operational stock (> 0)!
   const { data: items = [], isLoading } = useQuery({
     queryKey: ['node-stock-items', nodeId],
     queryFn: async (): Promise<MasterItem[]> => {
-      if (nodeId) {
-        try {
-          const stock = await hierarchyApi.getNodeStock(nodeId);
-          if (stock && stock.length > 0) {
-            return stock.map(s => ({
-              id: s.item_code,
-              itemCode: s.item_code,
-              itemNameAr: s.item_name_ar || s.item_code,
-              itemNameEn: s.item_name_en,
-              categoryCode: s.category,
-              unitCode: s.unit || 'حبة',
-              unitNameAr: s.unit || 'حبة',   
-              avgCost: s.avg_cost || 0
-            }));
-          }
-        } catch (err) {
-          console.warn(`Could not load node stock for nodeId ${nodeId}, falling back to master items:`, err);
-        }
+      if (!nodeId) {
+        return [];
       }
-      return masterDataApi.getItems();
+      try {
+        const stock = await hierarchyApi.getNodeStock(nodeId);
+        if (stock && stock.length > 0) {
+          // Strictly filter only items that have operational stock > 0
+          const validStock = stock.filter(s => (s.qty_operational || 0) > 0);
+          return validStock.map(s => ({
+            id: s.item_code,
+            itemCode: s.item_code,
+            itemNameAr: s.item_name_ar || s.item_code,
+            itemNameEn: s.item_name_en,
+            categoryCode: s.category,
+            unitCode: s.unit || 'حبة',
+            unitNameAr: s.unit || 'حبة',   
+            avgCost: s.avg_cost || 0,
+            availableQty: Number(s.qty_operational || 0)
+          }));
+        }
+      } catch (err) {
+        console.warn(`Could not load node stock for nodeId ${nodeId}:`, err);
+      }
+      // Never fallback to master items without stock!
+      return [];
     },
-    staleTime: 2 * 60 * 1000
+    staleTime: 30 * 1000
   });
 
   const selectedItem = items.find(i => i.itemCode === value);
@@ -143,11 +147,11 @@ export const AsyncItemSelector: React.FC<AsyncItemSelectorProps> = ({
         <input
           ref={inputRef}
           type="text"
-          disabled={disabled}
-          value={isOpen ? searchTerm : (selectedItem ? `[${selectedItem.itemCode}] ${selectedItem.itemNameAr}` : '')}
+          disabled={disabled || !nodeId}
+          value={isOpen ? searchTerm : (selectedItem ? `[${selectedItem.itemCode}] ${selectedItem.itemNameAr} (متاح: ${selectedItem.availableQty || 0})` : '')}
           placeholder={effectivePlaceholder}
           onFocus={() => {
-            if (!disabled) {
+            if (!disabled && nodeId) {
               setIsOpen(true);
               setSearchTerm('');
             }
@@ -158,7 +162,7 @@ export const AsyncItemSelector: React.FC<AsyncItemSelectorProps> = ({
             if (!isOpen) setIsOpen(true);
           }}
           onKeyDown={handleKeyDown}
-          className="w-full pr-9 pl-8 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all disabled:opacity-50"
+          className="w-full pr-9 pl-8 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all disabled:opacity-50 disabled:bg-slate-50 disabled:cursor-not-allowed"
         />
         <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
           {isLoading ? <Loader2 size={15} className="animate-spin text-blue-500" /> : <Search size={15} />}
@@ -175,11 +179,17 @@ export const AsyncItemSelector: React.FC<AsyncItemSelectorProps> = ({
           {isLoading ? (
             <div className="p-4 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
               <Loader2 size={16} className="animate-spin text-blue-600" />
-              جاري البحث في قاعدة بيانات الأصناف...
+              جاري فحص الأرصدة المتوفرة في المستودع...
+            </div>
+          ) : items.length === 0 ? (
+            <div className="p-4 text-center text-xs text-amber-700 bg-amber-50/60 font-medium">
+              {nodeId 
+                ? '⚠️ لا توجد أصناف ذات رصيد متاح (> 0) في هذا المستودع حالياً' 
+                : 'يرجى اختيار مستودع المصدر أولاً لعرض الأصناف المتوفرة به'}
             </div>
           ) : filteredItems.length === 0 ? (
             <div className="p-4 text-center text-xs text-slate-400">
-              لا توجد أصناف تطابق "{searchTerm}"
+              لا توجد أصناف متوفرة تطابق "{searchTerm}"
             </div>
           ) : (
             filteredItems.map((item, idx) => {
@@ -188,7 +198,7 @@ export const AsyncItemSelector: React.FC<AsyncItemSelectorProps> = ({
 
               return (
                 <div
-                  key={item.itemCode}
+                  key={`${item.itemCode}-${idx}`}
                   onClick={() => handleSelectItem(item)}
                   onMouseEnter={() => setHighlightedIndex(idx)}
                   className={`p-3 text-xs cursor-pointer flex items-center justify-between transition-colors ${
@@ -196,7 +206,7 @@ export const AsyncItemSelector: React.FC<AsyncItemSelectorProps> = ({
                   } ${isSelected ? 'font-bold bg-blue-50/50' : ''}`}
                 >
                   <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 font-mono text-[10px] font-bold shrink-0">
+                    <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100 flex items-center justify-center font-mono text-[10px] font-bold shrink-0">
                       <Package size={14} />
                     </div>
                     <div className="flex flex-col">
@@ -216,15 +226,17 @@ export const AsyncItemSelector: React.FC<AsyncItemSelectorProps> = ({
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
+                    {item.availableQty !== undefined && (
+                      <span className="px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
+                        المتوفر: {item.availableQty} {item.unitNameAr || item.unitCode || 'وحدة'}
+                      </span>
+                    )}
                     {item.categoryCode && (
                       <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-500 text-[10px] font-semibold flex items-center gap-1">
                         <Tag size={10} />
                         {item.categoryCode}
                       </span>
                     )}
-                    <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-bold">
-                      {item.unitNameAr || item.unitCode || 'وحدة'}
-                    </span>
                     {isSelected && <Check size={14} className="text-blue-600" />}
                   </div>
                 </div>

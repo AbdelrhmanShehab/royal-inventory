@@ -3,65 +3,78 @@ import type {
   TransferDetails, 
   TransferSummary, 
   CreateTransferPayload, 
-  TransferFilterParams 
+  TransferFilterParams,
+  TransferType 
 } from '../types/transfer.types';
+
+const resolveTxnType = (t: any): TransferType => {
+  const rawType = t.txnType || t.txn_type;
+  if (rawType === 'laundry') return 'laundry';
+  const toId = Number(t.toNodeId || t.to_node_id);
+  const toName = String(t.toNodeNameAr || t.to_node_name || '');
+  const notes = String(t.notes || '');
+  if (toId === 29 || toName.includes('مغسلة') || notes.includes('[تحويل للمغسلة]')) {
+    return 'laundry';
+  }
+  return (rawType as TransferType) || 'internal_transfer';
+};
 
 export const transferApi = {
   // GET /transactions/transfers
-  getTransfers: async (params?: TransferFilterParams): Promise<TransferSummary[]> => {
-    const response = await api.get('/transactions/transfers', { params });
+  getTransfers: async (params?: TransferFilterParams | number): Promise<TransferSummary[]> => {
+    const queryParams = typeof params === 'number' ? { nodeId: params } : params;
+    const response = await api.get('/transactions/transfers', { params: queryParams });
     const data = response.data?.data || response.data || [];
     
-    // Normalize into TransferSummary list
-    return data.map((item: any) => ({
-      id: Number(item.id || item.txnId),
-      txnType: item.txnType,
-      status: item.status,
-      fromNodeId: Number(item.fromNodeId),
-      fromNodeNameAr: item.fromNodeNameAr || item.fromNodeName,
-      toNodeId: item.toNodeId ? Number(item.toNodeId) : null,
-      toNodeNameAr: item.toNodeNameAr || item.toNodeName,
-      createdBy: item.createdBy,
-      createdByNameAr: item.createdByNameAr || item.createdBy,
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt,
-      itemCount: Array.isArray(item.lines) ? item.lines.length : Number(item.itemCount || 0),
-      totalCost: item.totalCost ? Number(item.totalCost) : undefined
+    if (!Array.isArray(data)) return [];
+    return data.map((t: any) => ({
+      id: Number(t.txnId || t.id),
+      txnType: resolveTxnType(t),
+      status: t.status || 'draft',
+      fromNodeId: Number(t.fromNodeId || t.from_node_id),
+      fromNodeNameAr: t.fromNodeNameAr || t.from_node_name,
+      toNodeId: t.toNodeId ? Number(t.toNodeId || t.to_node_id) : null,
+      toNodeNameAr: t.toNodeNameAr || t.to_node_name,
+      createdBy: t.createdBy || t.created_by || 'أمين المستودع',
+      createdByNameAr: t.createdByNameAr || t.created_by_name || t.createdBy,
+      createdAt: t.createdAt || t.created_at || new Date().toISOString(),
+      updatedAt: t.updatedAt || t.updated_at,
+      itemCount: Array.isArray(t.lines) && t.lines.length > 0 ? t.lines.length : Number(t.itemCount !== undefined ? t.itemCount : (t.item_count || t.itemsCount || 0)),
+      totalCost: t.totalCost ? Number(t.totalCost) : undefined
     }));
   },
 
   // GET /transactions/transfers/:id
   getTransferById: async (id: number | string): Promise<TransferDetails> => {
     const response = await api.get(`/transactions/transfers/${id}`);
-    const data = response.data?.data || response.data;
+    const t = response.data?.data || response.data;
     
     return {
-      id: Number(data.id || id),
-      txnType: data.txnType,
-      status: data.status,
-      fromNodeId: Number(data.fromNodeId),
-      fromNodeNameAr: data.fromNodeNameAr || data.fromNodeName,
-      toNodeId: data.toNodeId ? Number(data.toNodeId) : null,
-      toNodeNameAr: data.toNodeNameAr || data.toNodeName,
-      createdBy: data.createdBy,
-      createdByNameAr: data.createdByNameAr || data.createdBy,
-      createdAt: data.createdAt,
-      updatedAt: data.updatedAt,
-      itemCount: Array.isArray(data.lines) ? data.lines.length : 0,
-      reason: data.reason,
-      notes: data.notes,
-      lines: (data.lines || []).map((l: any) => ({
+      id: Number(t.txnId || t.id || id),
+      txnType: resolveTxnType(t),
+      status: t.status || 'draft',
+      fromNodeId: Number(t.fromNodeId || t.from_node_id),
+      fromNodeNameAr: t.fromNodeNameAr || t.from_node_name,
+      toNodeId: t.toNodeId ? Number(t.toNodeId || t.to_node_id) : null,
+      toNodeNameAr: t.toNodeNameAr || t.to_node_name,
+      createdBy: t.createdBy || t.created_by || 'أمين المستودع',
+      createdByNameAr: t.createdByNameAr || t.created_by_name || t.createdBy,
+      createdAt: t.createdAt || t.created_at || new Date().toISOString(),
+      updatedAt: t.updatedAt || t.updated_at,
+      itemCount: Array.isArray(t.lines) && t.lines.length > 0 ? t.lines.length : Number(t.itemCount !== undefined ? t.itemCount : (t.item_count || t.itemsCount || 0)),
+      totalCost: t.totalCost ? Number(t.totalCost) : undefined,
+      reason: t.reason,
+      notes: t.notes,
+      lines: (t.lines || []).map((l: any) => ({
         id: l.id,
-        itemCode: l.itemCode,
-        itemNameAr: l.itemNameAr || l.itemCode,
-        itemNameEn: l.itemNameEn,
-        quantity: Number(l.quantity),
-        unitCode: l.unitCode,
-        unitNameAr: l.unitNameAr || l.unitCode,
-        unitCost: Number(l.unitCost || 0),
-        notes: l.notes
+        itemCode: l.itemCode || l.item_code,
+        itemNameAr: l.itemNameAr || l.item_name,
+        quantity: Number(l.quantity || l.qty || 0),
+        unitCode: l.unitCode || l.unit_code,
+        unitNameAr: l.unitNameAr || l.unit_name,
+        unitCost: Number(l.unitCost || l.unit_cost || 0)
       })),
-      timeline: data.timeline || []
+      timeline: t.timeline || []
     };
   },
 
