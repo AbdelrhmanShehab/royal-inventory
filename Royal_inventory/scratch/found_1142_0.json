@@ -1,0 +1,10 @@
+{
+  "name": "view_file",
+  "args": {
+    "AbsolutePath": "e:\\inventory_tracking_system\\public\\index.html",
+    "EndLine": 760,
+    "StartLine": 680,
+    "toolAction": "Viewing index.html around line 680",
+    "toolSummary": "Viewing public/index.html around line 680 to locate the end of explorer-operational-tab-content."
+  }
+}

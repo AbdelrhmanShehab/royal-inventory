@@ -1,0 +1,10 @@
+{
+  "name": "view_file",
+  "args": {
+    "AbsolutePath": "e:\\inventory_tracking_system\\public\\index.html",
+    "EndLine": 2532,
+    "StartLine": 2525,
+    "toolAction": "Viewing the script tag in index.html",
+    "toolSummary": "Viewing the script tag at the end of index.html."
+  }
+}

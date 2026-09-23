@@ -1,0 +1,2253 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>رؤية المخزون - مستكشف وهيكلة المستودعات</title>
+  
+  <!-- Google Fonts: Cairo for beautiful Arabic typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+  <!-- Toast Notification -->
+  <div id="toast-notify" class="toast">
+    <i id="toast-icon" class="fa-solid fa-circle-info"></i>
+    <span id="toast-message">مرحباً بك في مستكشف المستودعات!</span>
+  </div>
+
+  <!-- Login modal -->
+  <div id="login-overlay">
+    <div class="login-card">
+      <div class="login-logo">
+        <i class="fa-solid fa-box-open"></i>
+      </div>
+      <h2>دخول لوحة التحكم</h2>
+      <p>أدخل بيانات الحساب لاستعراض مستودعات كومسيس</p>
+      
+      <form id="login-form">
+        <div class="form-group">
+          <label for="username">اسم المستخدم</label>
+          <div class="input-wrapper">
+            <i class="fa-solid fa-user"></i>
+            <input type="text" id="username" class="input-control" value="admin" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="password">كلمة المرور</label>
+          <div class="input-wrapper">
+            <i class="fa-solid fa-lock"></i>
+            <input type="password" id="password" class="input-control" value="Admin@1234" required>
+          </div>
+        </div>
+
+        <button type="submit" class="btn" style="width:100%;">
+          <span>تسجيل الدخول</span>
+        </button>
+      </form>
+      <div id="login-error" class="error-msg">بيانات الدخول غير صحيحة</div>
+    </div>
+  </div>
+
+  <!-- Create Transfer Modal (Hidden by default) -->
+  <div id="legacy-create-transfer-modal" class="modal-overlay" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>إنشاء طلب تحويل داخلي جديد</h3>
+        <button class="modal-close-btn" onclick="toggleTransferModal(false)">&times;</button>
+      </div>
+
+      <form id="legacy-create-transfer-form" style="display:flex; flex-direction:column; gap:12px;">
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
+          <div class="form-group" style="margin-bottom:0;">
+            <label>المستودع المرسل (المصدر)</label>
+            <select id="legacy-tf-source-node" class="table-select" style="width:100%;" required>
+              <option value="">اختر مخزن المصدر...</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label>المستودع المستقبل (الوجهة)</label>
+            <select id="legacy-tf-dest-node" class="table-select" style="width:100%;" required>
+              <option value="">اختر مخزن الوجهة...</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:0;">
+          <label>سبب التحويل / ملاحظات</label>
+          <input type="text" id="legacy-tf-notes" class="input-control" placeholder="أدخل سبب الحركة أو تفاصيل إضافية..." required>
+        </div>
+
+        <div style="border-top:1px solid #f1f5f9; padding-top:10px; margin-top:10px;">
+          <div style="font-size:13px; font-weight:700; margin-bottom:10px; color:var(--primary);"><i class="fa-solid fa-square-plus"></i> إضافة أصناف التحويل</div>
+          
+          <div style="display:grid; grid-template-columns: 1fr 80px 100px 50px; gap:10px; align-items:flex-end;">
+            <div class="form-group" style="margin-bottom:0;">
+              <label>اختر الصنف</label>
+              <select id="legacy-tf-item-select" class="table-select" style="width:100%;">
+                <option value="">تحميل الأصناف...</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label>الكمية</label>
+              <input type="number" id="legacy-tf-item-qty" class="input-control" placeholder="10" style="padding:8px;">
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label>سعر التكلفة</label>
+              <input type="number" id="legacy-tf-item-cost" class="input-control" placeholder="150" style="padding:8px;">
+            </div>
+            <button type="button" class="btn" style="padding:10px;" onclick="addTransferLineItem()"><i class="fa-solid fa-plus"></i></button>
+          </div>
+        </div>
+
+        <!-- Selected lines table -->
+        <div style="max-height:150px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:8px; margin-top:10px;">
+          <table style="font-size:12px;">
+            <thead>
+              <tr style="background:#f8fafc;">
+                <th style="padding:8px;">اسم الصنف</th>
+                <th style="padding:8px;">الكمية</th>
+                <th style="padding:8px;">التكلفة</th>
+                <th style="padding:8px; width:50px;">حذف</th>
+              </tr>
+            </thead>
+            <tbody id="legacy-transfer-lines-body">
+              <tr>
+                <td colspan="4" style="text-align:center; color:var(--text-muted); padding:15px;">لم يتم إضافة أصناف للطلب بعد</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div style="display:flex; gap:10px; justify-content:flex-end; border-top:1px solid #f1f5f9; padding-top:15px; margin-top:10px;">
+          <button type="submit" class="btn">حفظ كطلب مسودة</button>
+          <button type="button" class="btn btn-secondary" onclick="toggleTransferModal(false)">إلغاء</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== QUICK CONSUME MODAL ===== -->
+  <div id="quick-consume-modal" class="modal-overlay" style="display:none; z-index:1100;">
+    <div class="modal-card" style="max-width:520px;">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div style="background: linear-gradient(135deg, #f59e0b, #ef4444); color:#fff; width:38px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px;">
+            <i class="fa-solid fa-bolt"></i>
+          </div>
+          <div>
+            <h3 style="font-size:16px; font-weight:800; color:var(--text-main);">سحب واستهلاك سريع</h3>
+            <p style="font-size:11px; color:var(--text-muted); margin:0;" id="qc-warehouse-name">مستودع: جاري التحميل...</p>
+          </div>
+        </div>
+        <button class="modal-close-btn" onclick="closeQuickConsumeModal()">×</button>
+      </div>
+
+      <!-- Item Selector -->
+      <div style="background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:12px; font-size:12px; color:#92400e; display:flex; align-items:center; gap:8px;">
+        <i class="fa-solid fa-circle-info" style="color:#f59e0b;"></i>
+        هذه العملية تستهلك الكمية مباشرة بدون مرور على مركز العمليات. تُسجَّل الحركة وتُرحَّل فوراً.
+      </div>
+
+      <div class="form-group" style="margin-bottom:0;">
+        <label style="font-weight:800; font-size:13px;">اختر الصنف المراد صرفه</label>
+        <select id="qc-item-select" class="table-select" style="width:100%; padding:12px; font-size:13px; margin-top:6px;" onchange="updateQuickConsumeStock()">
+          <option value="">اختر صنف من عهدة المستودع...</option>
+        </select>
+      </div>
+
+      <!-- Stock Indicator -->
+      <div id="qc-stock-indicator" style="display:none; background:#f0fdf4; border:1px solid #86efac; border-radius:8px; padding:10px 14px; font-size:12px; color:#166534; display:flex; align-items:center; gap:8px;">
+        <i class="fa-solid fa-boxes-stacked"></i>
+        <span id="qc-stock-text">الرصيد المتوفر: --</span>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label style="font-weight:800; font-size:13px;">الكمية المصروفة</label>
+          <input type="number" id="qc-qty" class="input-control" placeholder="0" min="0.01" step="0.01" style="padding:12px; margin-top:6px;">
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label style="font-weight:800; font-size:13px;">سبب الصرف (اختياري)</label>
+          <input type="text" id="qc-notes" class="input-control" placeholder="مثال: غداء يوم الاثنين..." style="padding:12px; margin-top:6px;">
+        </div>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-top:5px;">
+        <button class="btn" id="qc-confirm-btn" onclick="confirmQuickConsume()" style="flex:1; background:linear-gradient(135deg, #f59e0b, #ef4444); font-size:14px; padding:14px;">
+          <i class="fa-solid fa-bolt"></i> تأكيد الاستهلاك الفوري
+        </button>
+        <button class="btn btn-secondary" onclick="closeQuickConsumeModal()" style="padding:14px 20px;">
+          إلغاء
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== CONFIRM ALL DRAFTS MODAL ===== -->
+  <div id="confirm-all-drafts-modal" class="modal-overlay" style="display:none; z-index:1100;">
+    <div class="modal-card" style="max-width:480px;">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div style="background:#f59e0b; color:#fff; width:38px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px;">
+            <i class="fa-solid fa-clock-rotate-left"></i>
+          </div>
+          <div>
+            <h3 style="font-size:15px; font-weight:800; color:var(--text-main);">تأكيد وترحيل المسودات المعلقة</h3>
+          </div>
+        </div>
+        <button class="modal-close-btn" onclick="closeConfirmAllDraftsModal()">×</button>
+      </div>
+      <div id="pending-drafts-list" style="max-height:300px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;">
+        <!-- Loaded dynamically -->
+      </div>
+      <div style="display:flex; gap:10px; margin-top:5px;">
+        <button class="btn" id="btn-confirm-all-drafts" onclick="confirmAllPendingDrafts()" style="flex:1; background:var(--success); font-size:13px; padding:12px;">
+          <i class="fa-solid fa-circle-check"></i> ترحيل وتأكيد الكل الآن
+        </button>
+        <button class="btn btn-secondary" onclick="closeConfirmAllDraftsModal()" style="padding:12px 16px;">
+          إغلاق
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Transfer Details Modal (Hidden by default) -->
+  <div id="legacy-transfer-details-modal" class="modal-overlay" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>تفاصيل مستند التحويل الداخلي</h3>
+        <button class="modal-close-btn" onclick="toggleDetailsModal(false)">&times;</button>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; font-size:13px; border-bottom:1px solid #f1f5f9; padding-bottom:12px;">
+        <div><strong>رقم القيد:</strong> <span id="legacy-dt-ref">TR-2026-001</span></div>
+        <div><strong>الحالة:</strong> <span id="legacy-dt-status" class="badge">مسودة</span></div>
+        <div><strong>المستودع المصدر:</strong> <span id="legacy-dt-from">المطبخ الشرقي</span></div>
+        <div><strong>المستودع المستقبل:</strong> <span id="legacy-dt-to">ثلاجة المصنعات</span></div>
+        <div><strong>التاريخ:</strong> <span id="legacy-dt-date">2026/6/7</span></div>
+        <div><strong>ملاحظات:</strong> <span id="legacy-dt-notes">-</span></div>
+      </div>
+
+      <div style="font-weight:700; font-size:14px; margin-top:10px; color:var(--primary);">الأصناف المحولة:</div>
+      <div style="border:1px solid var(--card-border); border-radius:10px; overflow:hidden;">
+        <table style="font-size:12px;">
+          <thead>
+            <tr style="background:#f8fafc;">
+              <th style="padding:8px;">كود الصنف</th>
+              <th style="padding:8px;">اسم الصنف</th>
+              <th style="padding:8px;">الكمية</th>
+              <th style="padding:8px;">سعر التكلفة</th>
+            </tr>
+          </thead>
+          <tbody id="legacy-dt-table-body">
+            <!-- Dynamic lines -->
+          </tbody>
+        </table>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; margin-top:10px;">
+        <button class="btn btn-secondary" onclick="toggleDetailsModal(false)">إغلاق</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Dark Blue Sidebar -->
+  <div class="nav-sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo-icon"><i class="fa-solid fa-cubes"></i></div>
+      <div class="sidebar-logo-text">
+        <h1>رؤية المخزون</h1>
+        <span>ذكاء كومسيس</span>
+      </div>
+    </div>
+
+    <ul class="sidebar-menu">
+      <li class="menu-item" id="menu-dashboard"><a onclick="switchView('dashboard')"><i class="fa-solid fa-chart-line"></i> لوحة التحكم</a></li>
+      <li class="menu-item active" id="menu-explorer"><a onclick="switchView('explorer')"><i class="fa-solid fa-sitemap"></i> مستكشف المستودعات</a></li>
+      <li class="menu-item" id="menu-inbound"><a onclick="switchView('inbound')"><i class="fa-solid fa-download"></i> وارد المخزن الرئيسي</a></li>
+      <li class="menu-item" id="menu-search"><a onclick="switchView('search')"><i class="fa-solid fa-magnifying-glass"></i> البحث في المخزون</a></li>
+      <li class="menu-item" id="menu-low"><a onclick="switchView('low')"><i class="fa-solid fa-triangle-exclamation"></i> المخزون المنخفض</a></li>
+      <li class="menu-item" id="menu-transfers"><a onclick="switchView('transfers')"><i class="fa-solid fa-arrow-right-arrow-left"></i> مركز العمليات</a></li>
+      <li class="menu-item" id="menu-laundry" style="display:none;"><a onclick="switchView('laundry')"><i class="fa-solid fa-soap"></i> إدارة المغسلة</a></li>
+      <li class="menu-item" id="menu-users" style="display:none;"><a onclick="switchView('users')"><i class="fa-solid fa-users-gear"></i> إدارة المستخدمين</a></li>
+      <li class="menu-item" id="menu-permissions" style="display:none;"><a onclick="switchView('permissions')"><i class="fa-solid fa-shield-halved"></i> إدارة الصلاحيات</a></li>
+    </ul>
+
+    <div class="sidebar-footer">
+      <span>مصلحة الجمارك © 2026</span>
+      <button id="btn-logout" title="تسجيل الخروج"><i class="fa-solid fa-right-from-bracket"></i></button>
+    </div>
+  </div>
+
+  <!-- Main layout for right side -->
+  <div class="main-layout">
+    
+    <!-- Top Bar -->
+    <div class="topbar">
+      <div class="sync-status">
+        <i class="fa-solid fa-circle-check"></i>
+        <span>بيانات مباشرة من كومسيس . تمت المزامنة الآن</span>
+        <button id="btn-sync-all" style="background:none; border:none; cursor:pointer; color:var(--primary); font-size:12px; margin-right:8px; font-weight:700;"><i class="fa-solid fa-rotate"></i> تحديث</button>
+      </div>
+
+      <div class="topbar-actions">
+        <i class="fa-regular fa-bell bell-icon"></i>
+        <div class="user-badge" id="user-initials">AD</div>
+      </div>
+    </div>
+
+    <!-- VIEW 1: Explorer View (Warehouse Explorer tree) -->
+    <div class="split-area" id="explorer-view">
+      
+      <!-- LEFT AREA: Dashboard details & item tables -->
+      <div class="details-panel">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:15px;">
+          <div style="flex:1;">
+            <div class="selected-node-path" id="node-path">المستودعات / المستودع الرئيسي</div>
+            <div class="selected-node-title" id="selected-node-title">المستودع الرئيسي</div>
+          </div>
+          <!-- Quick Consume Button (child warehouses only) -->
+          <div id="quick-consume-btn-area" style="display:none;">
+            <button class="btn" onclick="openQuickConsumeModal()" id="btn-quick-consume"
+              style="background:linear-gradient(135deg, #f59e0b, #ef4444); font-size:13px; padding:10px 18px; border-radius:12px; box-shadow:0 4px 12px rgba(239,68,68,0.3);">
+              <i class="fa-solid fa-bolt"></i> سحب واستهلاك سريع
+            </button>
+          </div>
+        </div>
+
+        <!-- Pending Drafts Alert Banner (child warehouses only) -->
+        <div id="pending-drafts-banner" style="display:none; background:linear-gradient(135deg, #fffbeb, #fef3c7); border:1px solid #fde68a; border-radius:12px; padding:14px 18px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <div style="color:#f59e0b; font-size:22px; animation: pulse-warn 1.5s infinite;"><i class="fa-solid fa-triangle-exclamation"></i></div>
+              <div>
+                <div style="font-size:13px; font-weight:800; color:#92400e;">تنبيه: توجد حركات استهلاك معلقة (مسودة) لم يتم تأكيدها</div>
+                <div style="font-size:12px; color:#a16207; margin-top:2px;" id="pending-drafts-count-text">عدد المسودات: ...</div>
+              </div>
+            </div>
+            <button class="btn" onclick="openConfirmAllDraftsModal()"
+              style="background:#f59e0b; font-size:12px; padding:8px 14px; white-space:nowrap;">
+              <i class="fa-solid fa-circle-check"></i> ترحيل الكل الآن
+            </button>
+          </div>
+        </div>
+
+        <div class="stats-grid" id="stats-grid-area" style="grid-template-columns:1fr 1fr 1fr 1fr;">
+          <div class="stat-card">
+            <h3 id="card-total-stock-label">إجمالي المخزون</h3>
+            <div class="value" id="card-total-stock">0</div>
+          </div>
+          <div class="stat-card">
+            <h3 id="card-item-types-label">أنواع العناصر</h3>
+            <div class="value" id="card-item-types">0</div>
+          </div>
+          <div class="stat-card">
+            <h3 id="card-subunits-label">الوحدات التابعة</h3>
+            <div class="value" id="card-subunits">0</div>
+          </div>
+          <!-- Consumption Rate Card (child only) -->
+          <div class="stat-card" id="card-consumption-rate-wrap" style="display:none; border-right:4px solid #ef4444;">
+            <h3 style="color:#ef4444;"><i class="fa-solid fa-fire" style="font-size:11px;"></i> نسبة الاستهلاك</h3>
+            <div class="value" id="card-consumption-rate" style="font-size:22px; color:#ef4444;">0%</div>
+            <div style="margin-top:6px;">
+              <div class="progress-bar" style="height:5px;">
+                <div id="card-consumption-bar" class="progress-fill" style="width:0%; background:linear-gradient(90deg, #f59e0b, #ef4444);"></div>
+              </div>
+              <div style="font-size:10px; color:var(--text-muted); margin-top:4px;" id="card-consumption-sub">من الوارد الكلي</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="progress-grid" id="progress-container">
+          <!-- Loaded dynamically -->
+        </div>
+
+        <div class="table-card">
+          <!-- Explorer View Tabs -->
+          <div style="display:flex; gap:10px; border-bottom:2px solid #e2e8f0; margin-bottom:15px;">
+            <button class="tab-btn active" id="tab-btn-stock" onclick="switchExplorerTab('stock')">الأصناف الحالية</button>
+            <button class="tab-btn" id="tab-btn-movement" onclick="switchExplorerTab('movement')">ملخص حركة المستودع (تقرير القيمة)</button>
+            <button class="tab-btn" id="tab-btn-subunits" onclick="switchExplorerTab('subunits')" style="display:none;">المستودعات التابعة</button>
+            <button class="tab-btn" id="tab-btn-distribution" onclick="switchExplorerTab('distribution')" style="display:none;">توزيع واستهلاك الأقسام</button>
+            <button class="tab-btn" id="tab-btn-transactions" onclick="switchExplorerTab('transactions')" style="display:none;">سجل العمليات</button>
+            <button class="tab-btn" id="tab-btn-inbound-returns" onclick="switchExplorerTab('inbound-returns')" style="display:none;">الوارد والمرتجعات</button>
+          </div>
+          
+          <!-- Tab 1: Current Stock Items -->
+          <div id="explorer-stock-tab-content">
+            <div class="table-actions" style="margin-bottom:15px;">
+              <input type="text" id="table-search" class="table-search-input" placeholder="ابحث عن عناصر أو رموز...">
+              
+              <select class="table-select">
+                <option>ترتيب: الاسم</option>
+              </select>
+
+              <select class="table-select" id="category-filter" onchange="notify('تم تصفية البيانات')">
+                <option value="all">الكل</option>
+              </select>
+            </div>
+
+            <div style="overflow-x: auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>اسم العنصر</th>
+                    <th>الرمز</th>
+                    <th>الكمية</th>
+                    <th>الوحدات الحاملة</th>
+                    <th>الفئة</th>
+                    <th>آخر تحديث</th>
+                  </tr>
+                </thead>
+                <tbody id="stock-table-body">
+                  <tr>
+                    <td colspan="6">
+                      <div class="empty-state">
+                        <i class="fa-solid fa-boxes-stacked"></i>
+                        <p>لا توجد عناصر تطابق عوامل التصفية.</p>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="pagination-bar">
+              <button class="btn btn-secondary pag-btn" id="btn-exp-prev" disabled>السابق</button>
+              <span style="font-size:12px; color:var(--text-muted);" id="pagination-label">صفحة 1 / 1</span>
+              <button class="btn btn-secondary pag-btn" id="btn-exp-next" disabled>التالي</button>
+            </div>
+          </div>
+
+          <!-- Tab 2: Movement Summary Report -->
+          <div id="explorer-movement-tab-content" style="display:none;">
+            <div style="display:flex; gap:10px; align-items:center; margin-bottom:15px; justify-content:space-between;">
+              <div style="font-size:12px; color:var(--text-muted); font-weight:600;"><i class="fa-solid fa-file-invoice-dollar"></i> تقرير القيمة المالية والأرصدة التشغيلية للمستودع الفرعي</div>
+              <button class="btn btn-secondary" onclick="notify('تم تصدير ملف إكسيل بنجاح!', 'success')" style="padding:6px 12px; font-size:11px;"><i class="fa-solid fa-file-excel" style="color:#10b981;"></i> تصدير إكسيل</button>
+            </div>
+
+            <!-- Date range filters for Movement Summary -->
+            <div class="table-actions" style="margin-bottom: 15px; display: flex; gap: 12px; align-items: center; justify-content: flex-start; background: #f8fafc; padding: 10px; border-radius: 8px; flex-wrap: wrap;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <label for="mov-from-date" style="font-size: 12px; font-weight: 700; color: var(--text-main);"><i class="fa-solid fa-calendar-days" style="color:var(--primary);"></i> من تاريخ:</label>
+                <input type="date" id="mov-from-date" class="table-select" style="padding: 6px 10px; border-radius: 6px; font-family: Cairo; width:150px;">
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <label for="mov-to-date" style="font-size: 12px; font-weight: 700; color: var(--text-main);"><i class="fa-solid fa-calendar-days" style="color:var(--primary);"></i> إلى تاريخ:</label>
+                <input type="date" id="mov-to-date" class="table-select" style="padding: 6px 10px; border-radius: 6px; font-family: Cairo; width:150px;">
+              </div>
+              <button class="btn btn-secondary" id="btn-clear-mov-filters" style="padding: 6px 12px; font-size: 11px;"><i class="fa-solid fa-rotate-left"></i> إعادة تعيين</button>
+            </div>
+            
+            <div style="overflow-x: auto;">
+              <table class="report-table">
+                <thead>
+                  <tr style="background:#f8fafc;">
+                    <th rowspan="2" style="border:1px solid #cbd5e1; text-align:center;">كود الصنف</th>
+                    <th rowspan="2" style="border:1px solid #cbd5e1; text-align:center;">اسم الصنف</th>
+                    <th rowspan="2" style="border:1px solid #cbd5e1; text-align:center;">وحدة الصنف</th>
+                    <th colspan="2" style="border:1px solid #cbd5e1; text-align:center; background:#f8fafc;">الرصيد السابق (ما قبله)</th>
+                    <th colspan="2" style="border:1px solid #cbd5e1; text-align:center; background:#eff6ff;">إجمالي الوارد</th>
+                    <th colspan="2" style="border:1px solid #cbd5e1; text-align:center; background:#fef2f2;">إجمالي المنصرف</th>
+                    <th colspan="2" style="border:1px solid #cbd5e1; text-align:center; background:#ecfdf5;">الرصيد الحالي (الرصيد)</th>
+                  </tr>
+                  <tr style="background:#f8fafc;">
+                    <th style="border:1px solid #cbd5e1; text-align:center;">كمية</th>
+                    <th style="border:1px solid #cbd5e1; text-align:center;">قيمة (ج.م)</th>
+                    <th style="border:1px solid #cbd5e1; text-align:center;">كمية</th>
+                    <th style="border:1px solid #cbd5e1; text-align:center;">قيمة (ج.م)</th>
+                    <th style="border:1px solid #cbd5e1; text-align:center;">كمية</th>
+                    <th style="border:1px solid #cbd5e1; text-align:center;">قيمة (ج.م)</th>
+                    <th style="border:1px solid #cbd5e1; text-align:center;">كمية</th>
+                    <th style="border:1px solid #cbd5e1; text-align:center;">قيمة (ج.م)</th>
+                  </tr>
+                </thead>
+                <tbody id="movement-report-body">
+                  <!-- Dynamic report rows -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Tab 2.5: Parent Sub-Warehouses Grid (Subunits Tab Content) -->
+          <div id="explorer-subunits-tab-content" style="display:none;">
+            <div style="font-size:12px; color:var(--text-muted); font-weight:600; margin-bottom:15px;">
+              <i class="fa-solid fa-hotel"></i> المستودعات الفرعية والعهد التشغيلية التابعة لهذا المجلد
+            </div>
+            <div style="overflow-x: auto;">
+              <table>
+                <thead>
+                  <tr style="background:#f8fafc;">
+                    <th>كود المستودع</th>
+                    <th>اسم المستودع</th>
+                    <th>مشرف العهدة</th>
+                    <th>حالة المزامنة</th>
+                    <th>إجمالي كميات الأصناف</th>
+                    <th>الإجراء</th>
+                  </tr>
+                </thead>
+                <tbody id="parent-subunits-body">
+                  <!-- Loaded dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Tab 2.7: Parent Divisions Distribution Breakdown -->
+          <div id="explorer-distribution-tab-content" style="display:none;">
+            <div style="font-size:12px; color:var(--text-muted); font-weight:600; margin-bottom:15px;">
+              <i class="fa-solid fa-chart-pie"></i> توزيع واستهلاك المنصرف على الأقسام والعهد الفرعية التابعة
+            </div>
+            <div style="overflow-x: auto;">
+              <table>
+                <thead>
+                  <tr style="background:#f8fafc;">
+                    <th>اسم العهدة الفرعية</th>
+                    <th>كود الصنف</th>
+                    <th>اسم الصنف</th>
+                    <th>نوع المادة</th>
+                    <th>إجمالي الوارد (Received)</th>
+                    <th>إجمالي الاستهلاك (Consumed)</th>
+                    <th>التالف والهدر (Damaged/Wasted)</th>
+                    <th>الرصيد التشغيلي الحالي</th>
+                  </tr>
+                </thead>
+                <tbody id="parent-distribution-body">
+                  <tr>
+                    <td colspan="8" style="text-align:center; padding:20px; color:var(--text-muted);">جاري تحميل بيانات التوزيع...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Tab 3: Warehouse Ledger (Transactions Tab Content) -->
+          <div id="explorer-transactions-tab-content" style="display:none;">
+            <div style="display:flex; gap:10px; align-items:center; margin-bottom:15px; justify-content:space-between;">
+              <div style="font-size:12px; color:var(--text-muted); font-weight:600;">
+                <i class="fa-solid fa-clock-rotate-left"></i> سجل العمليات التشغيلية المنفذة في هذا المستودع
+              </div>
+            </div>
+
+            <!-- Custom Filters for Transactions Tab -->
+            <div class="table-actions" style="margin-bottom: 15px; display: flex; gap: 12px; align-items: center; justify-content: flex-start; background: #f8fafc; padding: 12px; border-radius: 8px; flex-wrap: wrap;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <label for="tx-from-date" style="font-size: 12px; font-weight: 700; color: var(--text-main);"><i class="fa-solid fa-calendar-days" style="color:var(--primary);"></i> من تاريخ:</label>
+                <input type="date" id="tx-from-date" class="table-select" style="padding: 6px 10px; border-radius: 6px; font-family: Cairo; width:150px;">
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <label for="tx-to-date" style="font-size: 12px; font-weight: 700; color: var(--text-main);"><i class="fa-solid fa-calendar-days" style="color:var(--primary);"></i> إلى تاريخ:</label>
+                <input type="date" id="tx-to-date" class="table-select" style="padding: 6px 10px; border-radius: 6px; font-family: Cairo; width:150px;">
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <label for="tx-type-filter" style="font-size: 12px; font-weight: 700; color: var(--text-main);"><i class="fa-solid fa-filter" style="color:var(--primary);"></i> نوع الحركة:</label>
+                <select id="tx-type-filter" class="table-select" style="padding: 6px 10px; border-radius: 6px; font-family: Cairo; width:140px;">
+                  <option value="all">كل الحركات</option>
+                  <option value="internal_transfer">تحويل داخلي</option>
+                  <option value="consumption">استهلاك تشغيلي</option>
+                  <option value="return">مرتجع للمخزن</option>
+                  <option value="waste">هدر مواد</option>
+                  <option value="damage">تلف سلع</option>
+                  <option value="disposal">تكهين واستبعاد</option>
+                </select>
+              </div>
+              <button class="btn btn-secondary" id="btn-clear-tx-filters" style="padding: 6px 12px; font-size: 11px;"><i class="fa-solid fa-rotate-left"></i> إعادة تعيين</button>
+            </div>
+
+            <div style="overflow-x: auto;">
+              <table>
+                <thead>
+                  <tr style="background:#f8fafc;">
+                    <th>رقم الحركة</th>
+                    <th>نوع الحركة</th>
+                    <th>الجهة (من ➔ إلى)</th>
+                    <th>التاريخ</th>
+                    <th>المنشئ</th>
+                    <th>البيان / الملاحظات</th>
+                    <th>الحالة</th>
+                    <th>الإجراء</th>
+                  </tr>
+                </thead>
+                <tbody id="node-transactions-body">
+                  <!-- Loaded dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Tab 4: Node Inbound and Returns (Inbound & Returns Tab Content) -->
+          <div id="explorer-inbound-returns-tab-content" style="display:none;">
+            <!-- Date range filters for Inbound & Returns tab -->
+            <div class="table-actions" style="margin-bottom: 15px; display: flex; gap: 12px; align-items: center; justify-content: flex-start; background: #f8fafc; padding: 10px; border-radius: 8px; flex-wrap: wrap;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <label for="ir-from-date" style="font-size: 12px; font-weight: 700; color: var(--text-main);"><i class="fa-solid fa-calendar-days" style="color:var(--primary);"></i> من تاريخ:</label>
+                <input type="date" id="ir-from-date" class="table-select" style="padding: 6px 10px; border-radius: 6px; font-family: Cairo; width:150px;">
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <label for="ir-to-date" style="font-size: 12px; font-weight: 700; color: var(--text-main);"><i class="fa-solid fa-calendar-days" style="color:var(--primary);"></i> إلى تاريخ:</label>
+                <input type="date" id="ir-to-date" class="table-select" style="padding: 6px 10px; border-radius: 6px; font-family: Cairo; width:150px;">
+              </div>
+              <button class="btn btn-secondary" id="btn-clear-ir-filters" style="padding: 6px 12px; font-size: 11px;"><i class="fa-solid fa-rotate-left"></i> إعادة تعيين</button>
+            </div>
+
+            <!-- Returnables Section -->
+            <div style="background: #fdf2f2; border: 1px solid #fecaca; border-radius: 12px; padding: 15px; margin-bottom: 20px;">
+              <div style="font-size:14px; font-weight:800; color:#b91c1c; margin-bottom:10px; display:flex; align-items:center; gap:8px;">
+                <i class="fa-solid fa-rotate-left"></i> عهد مستعارة معلقة واجبة الارتجاع للمستودع الرئيسي
+              </div>
+              <div style="overflow-x: auto; background:#fff; border-radius:8px; border:1px solid #fee2e2;">
+                <table>
+                  <thead>
+                    <tr style="background:#fef2f2; color:#991b1b; font-size:12px;">
+                      <th>كود الصنف</th>
+                      <th>اسم الصنف</th>
+                      <th>نوع العهدة</th>
+                      <th>الكمية الحالية بالعهدة</th>
+                      <th>الإجراء</th>
+                    </tr>
+                  </thead>
+                  <tbody id="node-returns-body">
+                    <!-- Loaded dynamically -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Inbound Deliveries History Section -->
+            <div>
+              <div style="font-size:13px; color:var(--text-muted); font-weight:700; margin-bottom:10px; display:flex; align-items:center; gap:8px;">
+                <i class="fa-solid fa-truck-ramp-box"></i> سجل الشحنات المستلمة من المخزن الرئيسي (كومسيس)
+              </div>
+              <div style="overflow-x: auto; border: 1px solid var(--card-border); border-radius:12px;">
+                <table>
+                  <thead>
+                    <tr style="background:#f8fafc; font-size:12px;">
+                      <th>رقم التحويل</th>
+                      <th>كود الصنف</th>
+                      <th>اسم الصنف</th>
+                      <th>الكمية المستلمة</th>
+                      <th>نوع المادة</th>
+                      <th>المصدر</th>
+                      <th>التاريخ والوقت</th>
+                    </tr>
+                  </thead>
+                  <tbody id="node-inbound-history-body">
+                    <!-- Loaded dynamically -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- RIGHT AREA: Tree navigation inside f8fafc panel -->
+      <div class="tree-panel">
+        <div style="display: flex; gap: 8px;">
+          <select id="group-select" class="table-select" style="flex-grow:1;">
+            <!-- Dynamic groups -->
+          </select>
+          <button id="btn-add-group-toggle" class="btn btn-secondary" style="width: 36px; padding:0; display:flex; align-items:center; justify-content:center;" title="إضافة فندق/مجموعة"><i class="fa-solid fa-plus"></i></button>
+        </div>
+
+        <form id="create-group-form" style="display:none; flex-direction:column; gap:8px; background:#fff; border:1px solid var(--card-border); padding:12px; border-radius:10px;">
+          <input type="text" id="new-group-name" class="input-control" placeholder="اسم المجموعة..." required style="padding: 6px 12px;">
+          <input type="text" id="new-group-code" class="input-control" placeholder="الرمز (أحرف)..." required style="padding: 6px 12px;">
+          <div style="display:flex; gap:5px;">
+            <button type="submit" class="btn" style="padding:5px;">حفظ</button>
+            <button type="button" id="btn-cancel-group" class="btn btn-secondary" style="padding:5px;">إلغاء</button>
+          </div>
+        </form>
+
+        <div class="tree-card">
+          <div class="tree-card-title">التسلسل</div>
+          <div class="tree-container" id="tree-container">
+            <!-- Loaded recursively -->
+          </div>
+        </div>
+
+        <div class="actions-card" id="hierarchy-mgmt-card">
+          <div class="actions-card-title">
+            <i class="fa-solid fa-gears"></i>
+            <span>إدارة شجرة المستودعات</span>
+          </div>
+
+          <form id="add-parent-node-form">
+            <div style="font-size:11px; font-weight:700; color:var(--text-muted); margin-bottom:2px;">إضافة مجلد فرعي افتراضي</div>
+            <input type="text" id="parent-node-name" class="input-control" placeholder="مثال: مطابخ فندق جاردن" required style="padding:6px 10px;">
+            <button type="submit" class="btn btn-secondary" style="padding: 6px; font-size:12px;"><i class="fa-solid fa-folder-plus"></i> إضافة مجلد</button>
+          </form>
+
+          <form id="link-warehouse-form">
+            <div style="font-size:11px; font-weight:700; color:var(--text-muted); margin-bottom:2px;">ربط مخزن كومسيس الفعلي</div>
+            <select id="comsys-warehouse-select" class="table-select" style="padding:6px; font-size:12px;" required>
+              <option value="">اختر مخزن للربط...</option>
+            </select>
+            <input type="text" id="child-node-name" class="input-control" placeholder="اسم العرض بالسيستم..." required style="padding:6px 10px;">
+            <button type="submit" class="btn" style="padding: 6px; font-size:12px;"><i class="fa-solid fa-link"></i> ربط مخزن</button>
+          </form>
+
+          <div id="selected-node-ops" style="display:none; padding-top:10px; border-top:1px dashed #f1f5f9;">
+            <button class="btn btn-secondary" style="color:var(--danger); border-color:var(--danger); padding:8px; font-size:12px; width:100%;" id="btn-delete-node">
+              <i class="fa-solid fa-trash-can"></i> حذف العقدة الحالية
+            </button>
+          </div>
+
+          <!-- Quick Consume shortcut in sidebar (child only) -->
+          <div id="sidebar-quick-consume-area" style="display:none; padding-top:10px; border-top:1px dashed #f1f5f9;">
+            <button class="btn" onclick="openQuickConsumeModal()"
+              style="background:linear-gradient(135deg, #f59e0b 0%, #ef4444 100%); width:100%; padding:10px; font-size:12px; border-radius:10px;">
+              <i class="fa-solid fa-bolt"></i> سحب واستهلاك سريع
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- VIEW 2: Transfers/Movements Log View (Hidden by default) -->
+    <div class="split-area" id="transfers-view" style="display: none;">
+      
+      <!-- LEFT AREA: Transfer details / inline forms / empty states -->
+      <div class="details-panel" id="tf-left-details">
+        <!-- Loaded dynamically via JavaScript -->
+      </div>
+
+      <!-- RIGHT AREA: Transfers List Sidebar panel -->
+      <div class="tree-panel" style="width: 360px; padding: 20px; display: flex; flex-direction: column; gap: 15px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div style="font-size: 15px; font-weight: 800; color: var(--text-main);">سجل العمليات والعهدة</div>
+          <button class="btn" style="padding: 6px 12px; font-size:12px;" onclick="showNewTransferForm()">
+            <i class="fa-solid fa-plus"></i> جديد
+          </button>
+        </div>
+
+        <div style="position: relative;">
+          <input type="text" id="tf-search" class="table-search-input" placeholder="ابحث برقم القيد أو المستودع..." style="width: 100%; padding-left: 30px;">
+          <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 12px;"></i>
+        </div>
+
+        <!-- Filters Grid -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <select id="tf-status-filter" class="table-select" style="padding: 6px; font-size: 12px;">
+            <option value="all">كل الحالات</option>
+            <option value="draft">مسودة (Draft)</option>
+            <option value="pending_approval">بانتظار الموافقة (Awaiting Approval)</option>
+            <option value="approved">معتمدة (Approved)</option>
+            <option value="shipped">بالطريق / مشحونة (Shipped)</option>
+            <option value="confirmed">مكتملة ومؤكدة (Confirmed)</option>
+            <option value="cancelled">ملغية (Cancelled)</option>
+          </select>
+          <select id="tf-type-filter" class="table-select" style="padding: 6px; font-size: 12px;">
+            <option value="all">كل العمليات</option>
+            <option value="consumption">استهلاك تشغيلي</option>
+            <option value="internal_transfer">تحويل داخلي</option>
+            <option value="waste">هدر مواد</option>
+            <option value="damage">تلف سلع</option>
+            <option value="return">مرتجع للمخزن</option>
+            <option value="disposal">تكهين واستبعاد</option>
+          </select>
+        </div>
+
+        <!-- Date Range Filter -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: #f8fafc; padding: 8px; border-radius: 8px; border: 1px solid var(--card-border);">
+          <div style="display:flex; flex-direction:column; gap:2px; text-align:right;">
+            <label for="tf-from-date" style="font-size:10px; font-weight:700; color:var(--text-muted);"><i class="fa-solid fa-calendar-day" style="color:var(--primary);"></i> من تاريخ:</label>
+            <input type="date" id="tf-from-date" class="table-select" style="padding: 4px; font-size: 11px; font-family: Cairo; border-radius: 4px;">
+          </div>
+          <div style="display:flex; flex-direction:column; gap:2px; text-align:right;">
+            <label for="tf-to-date" style="font-size:10px; font-weight:700; color:var(--text-muted);"><i class="fa-solid fa-calendar-day" style="color:var(--primary);"></i> إلى تاريخ:</label>
+            <input type="date" id="tf-to-date" class="table-select" style="padding: 4px; font-size: 11px; font-family: Cairo; border-radius: 4px;">
+          </div>
+        </div>
+
+        <!-- Cards Container -->
+        <div id="tf-list-cards-container" style="flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; max-height: calc(100vh - 280px);">
+          <!-- Dynamic cards loaded via JS -->
+        </div>
+
+        <!-- Pagination Bar -->
+        <div class="pagination-bar" style="padding-top: 10px; margin-top: auto;">
+          <button class="btn btn-secondary pag-btn" id="btn-tf-prev" onclick="changeTransfersPage(-1)" style="padding: 4px 10px;">السابق</button>
+          <span style="font-size: 11px; color: var(--text-muted); font-weight: 600;" id="tf-pagination-label">صفحة 1 / 1</span>
+          <button class="btn btn-secondary pag-btn" id="btn-tf-next" onclick="changeTransfersPage(1)" style="padding: 4px 10px;">التالي</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW 3: Dashboard View -->
+    <div class="split-area" id="dashboard-view" style="display: none; grid-template-columns: 1fr;">
+      <div class="details-panel" style="max-width: 1200px; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 24px;">
+        <div>
+          <div class="selected-node-path">الرئيسية / لوحة التحكم</div>
+          <div class="selected-node-title">نظرة عامة على الأرصدة والعمليات</div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card" style="border-right: 4px solid var(--primary);">
+            <h3>إجمالي القيمة المالية للعهدة</h3>
+            <div class="value" id="db-total-value">0 ج.م</div>
+          </div>
+          <div class="stat-card" style="border-right: 4px solid var(--success);">
+            <h3>إجمالي المعاملات التشغيلية</h3>
+            <div class="value" id="db-total-txns">0</div>
+          </div>
+          <div class="stat-card" style="border-right: 4px solid var(--warning);">
+            <h3>معدل الاستهلاك الشهري</h3>
+            <div class="value" id="db-monthly-consumption">0 ج.م</div>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px;">
+          <!-- Recent Transactions -->
+          <div class="table-card">
+            <div style="font-size: 15px; font-weight: 800; color: var(--text-main); margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+              <span>أحدث الحركات في المستودعات الفرعية</span>
+              <button class="btn btn-secondary" onclick="switchView('transfers')" style="padding: 4px 10px; font-size: 11px;">عرض الكل</button>
+            </div>
+            <div style="overflow-x: auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>رقم الحركة</th>
+                    <th>نوع الحركة</th>
+                    <th>المستودع</th>
+                    <th>التاريخ</th>
+                    <th>الحالة</th>
+                  </tr>
+                </thead>
+                <tbody id="db-recent-txns-body">
+                  <!-- Load dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Stock Distribution by Type -->
+          <div class="table-card" style="display: flex; flex-direction: column; gap: 15px;">
+            <div style="font-size: 15px; font-weight: 800; color: var(--text-main); border-bottom: 1px solid #f1f5f9; padding-bottom: 10px;">
+              توزيع الأصناف حسب طبيعة المواد
+            </div>
+            <div id="db-distribution-container" style="display: flex; flex-direction: column; gap: 15px;">
+              <!-- Load dynamically with beautiful progress bars -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW 4: Search View -->
+    <div class="split-area" id="search-view" style="display: none; grid-template-columns: 1fr;">
+      <div class="details-panel" style="max-width: 1200px; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 24px;">
+        <div>
+          <div class="selected-node-path">الرئيسية / البحث الموحد</div>
+          <div class="selected-node-title">البحث المتقدم في مخزون العهدة</div>
+        </div>
+
+        <div class="table-card">
+          <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 15px; align-items: center;">
+            <input type="text" id="search-view-input" class="table-search-input" placeholder="ابحث باسم الصنف، كود الصنف، أو الباركود..." style="padding: 12px 15px;">
+            <select id="search-view-warehouse" class="table-select" style="padding: 12px;">
+              <option value="all">كل المستودعات الفرعية</option>
+            </select>
+            <select id="search-view-type" class="table-select" style="padding: 12px;">
+              <option value="all">كل الفئات</option>
+              <option value="consumable">مواد استهلاكية (Consumables)</option>
+              <option value="returnable">أدوات مستعارة (Returnable)</option>
+              <option value="durable">أصول مستديمة (Durable)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="table-card">
+          <div style="overflow-x: auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>كود الصنف</th>
+                  <th>اسم الصنف</th>
+                  <th>المستودع المتواجد به</th>
+                  <th>الكمية الحالية</th>
+                  <th>الوحدة</th>
+                  <th>نوع المادة</th>
+                  <th>التكلفة الفردية</th>
+                </tr>
+              </thead>
+              <tbody id="search-view-results-body">
+                <!-- Load dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW 5: Low Stock View -->
+    <div class="split-area" id="low-view" style="display: none; grid-template-columns: 1fr;">
+      <div class="details-panel" style="max-width: 1200px; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 24px;">
+        <div>
+          <div class="selected-node-path">الرئيسية / النواقص والطلب</div>
+          <div class="selected-node-title" style="color: var(--danger);"><i class="fa-solid fa-triangle-exclamation"></i> الأصناف منخفضة المخزون بالعهدة</div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card" style="border-right: 4px solid var(--danger);">
+            <h3>أصناف قاربت النفاد (أقل من 50 وحدة)</h3>
+            <div class="value" style="color:var(--danger);" id="low-stock-count">0</div>
+          </div>
+          <div class="stat-card">
+            <h3>نسبة النواقص من الإجمالي</h3>
+            <div class="value" id="low-stock-percent">0%</div>
+          </div>
+          <div class="stat-card" style="border-right: 4px solid var(--warning);">
+            <h3>إجراءات طلبات التموين</h3>
+            <button class="btn" onclick="notify('تم إرسال طلب تموين للمستودع الرئيسي بالأصناف المحددة!', 'success')" style="margin-top: 5px; font-size: 12px; width: 100%;">طلب تموين فوري</button>
+          </div>
+        </div>
+
+        <div class="table-card">
+          <div style="font-size: 13px; color: var(--text-muted); font-weight: 600; margin-bottom: 10px;">
+            توضح القائمة التالية المواد التي انخفض رصيدها عن الحد الحرج بالعهدة التشغيلية وتحتاج طلب صرف جديد من المستودع الرئيسي.
+          </div>
+          <div style="overflow-x: auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>كود الصنف</th>
+                  <th>اسم الصنف</th>
+                  <th>المستودع الفرعي</th>
+                  <th>الكمية المتبقية</th>
+                  <th>الحد الحرج الآمن</th>
+                  <th>حالة المخزون</th>
+                </tr>
+              </thead>
+              <tbody id="low-stock-body">
+                <!-- Load dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW 6: Main Warehouse Inbound View -->
+    <div class="split-area" id="inbound-view" style="display: none; grid-template-columns: 1fr;">
+      <div class="details-panel" style="max-width: 1200px; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 24px;">
+        <div>
+          <div class="selected-node-path">الرئيسية / الوارد اليومي</div>
+          <div class="selected-node-title"><i class="fa-solid fa-download"></i> متابعة الوارد اليومي من المخزن الرئيسي</div>
+        </div>
+
+        <div class="table-card">
+          <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 15px; align-items: center; text-align: right;">
+            <div class="form-group" style="margin-bottom:0;">
+              <label style="font-size:11px; font-weight:700;">البحث باسم أو كود الصنف</label>
+              <input type="text" id="inbound-search-input" class="table-search-input" placeholder="ابحث باسم أو كود الصنف..." style="padding: 10px 15px;">
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label style="font-size:11px; font-weight:700;">نوع مادة الصنف</label>
+              <select id="inbound-type-filter" class="table-select" style="padding: 10px;">
+                <option value="all">كل الفئات</option>
+                <option value="consumable">استهلاكي (Consumable)</option>
+                <option value="returnable">أدوات مستعارة (Returnable)</option>
+                <option value="durable">أصول مستديمة (Durable)</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom:0; display:flex; gap:10px;">
+              <div style="flex:1;">
+                <label style="font-size:11px; font-weight:700; display:block; margin-bottom:4px;"><i class="fa-solid fa-calendar-day" style="color:var(--primary);"></i> من تاريخ</label>
+                <input type="date" id="inbound-from-date" class="table-select" style="padding: 10px; font-family: Cairo; width: 100%;">
+              </div>
+              <div style="flex:1;">
+                <label style="font-size:11px; font-weight:700; display:block; margin-bottom:4px;"><i class="fa-solid fa-calendar-day" style="color:var(--primary);"></i> إلى تاريخ</label>
+                <input type="date" id="inbound-to-date" class="table-select" style="padding: 10px; font-family: Cairo; width: 100%;">
+              </div>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label style="font-size:11px; font-weight:700;">مستودع العهدة الوجهة</label>
+              <select id="inbound-dest-filter" class="table-select" style="padding: 10px;">
+                <option value="all">كل الأقسام المستلمة</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-card">
+          <div style="overflow-x: auto;">
+            <table>
+              <thead>
+                <tr style="background:#f8fafc;">
+                  <th>رقم الحركة</th>
+                  <th>نوع المستند</th>
+                  <th>كود الصنف</th>
+                  <th>اسم الصنف</th>
+                  <th>الكمية المستلمة</th>
+                  <th>نوع المادة</th>
+                  <th>من مستودع (المصدر)</th>
+                  <th>مستودع الوجهة (العهدة)</th>
+                  <th>تاريخ وتوقيت الترحيل</th>
+                </tr>
+              </thead>
+              <tbody id="inbound-table-body">
+                <tr>
+                  <td colspan="9" style="text-align:center; padding:30px; color:var(--text-muted);">
+                    <div class="empty-state">
+                      <i class="fa-solid fa-boxes-stacked" style="font-size:48px;"></i>
+                      <p style="margin-top:10px;">لا يوجد وارد مطابق لعوامل التصفية المحددة.</p>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== VIEW: LAUNDRY MANAGEMENT ===== -->
+    <div class="split-area" id="laundry-view" style="display:none; grid-template-columns:1fr;">
+      <div class="details-panel" style="max-width:1400px; margin:0 auto; width:100%; display:flex; flex-direction:column; gap:24px;">
+        
+        <!-- Page Header -->
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+          <div>
+            <div class="selected-node-path">العمليات / إدارة المغسلة</div>
+            <div class="selected-node-title"><i class="fa-solid fa-soap"></i> نظام إدارة وتكلفة المغسلة (Laundry Center)</div>
+          </div>
+          <!-- Sub-tabs Navigation Buttons -->
+          <div style="display:flex; gap:8px; background:#f1f5f9; padding:6px; border-radius:12px;">
+            <button class="btn laundry-tab-btn active" id="l-tab-btn-overview" onclick="switchLaundryTab('overview')" style="font-size:12px; padding:8px 14px; background:none; color:var(--text-muted); border:none; box-shadow:none;">نظرة عامة والربحية</button>
+            <button class="btn laundry-tab-btn" id="l-tab-btn-transfers" onclick="switchLaundryTab('transfers')" style="font-size:12px; padding:8px 14px; background:none; color:var(--text-muted); border:none; box-shadow:none;">طلبات الشحن والاستلام</button>
+            <button class="btn laundry-tab-btn" id="l-tab-btn-batches" onclick="switchLaundryTab('batches')" style="font-size:12px; padding:8px 14px; background:none; color:var(--text-muted); border:none; box-shadow:none;">دورات الغسيل والتشغيل</button>
+            <button class="btn laundry-tab-btn" id="l-tab-btn-returns" onclick="switchLaundryTab('returns')" style="font-size:12px; padding:8px 14px; background:none; color:var(--text-muted); border:none; box-shadow:none;">المرتجع للمستودعات</button>
+            <button class="btn laundry-tab-btn" id="l-tab-btn-tickets" onclick="switchLaundryTab('tickets')" style="font-size:12px; padding:8px 14px; background:none; color:var(--text-muted); border:none; box-shadow:none;">تذاكر النزلاء والمبيعات</button>
+            <button class="btn laundry-tab-btn" id="l-tab-btn-reconciliation" onclick="switchLaundryTab('reconciliation')" style="font-size:12px; padding:8px 14px; background:none; color:var(--text-muted); border:none; box-shadow:none;">مطابقة الأرصدة والهدر</button>
+            <button class="btn laundry-tab-btn" id="l-tab-btn-stock" onclick="switchLaundryTab('stock')" style="font-size:12px; padding:8px 14px; background:none; color:var(--text-muted); border:none; box-shadow:none;">مخزون المغسلة الحالي</button>
+            <button class="btn laundry-tab-btn" id="l-tab-btn-configurations" onclick="switchLaundryTab('configurations')" style="font-size:12px; padding:8px 14px; background:none; color:var(--text-muted); border:none; box-shadow:none;">تهيئة البرامج والوصفات</button>
+          </div>
+        </div>
+
+        <!-- Tab 1: Overview Dashboard -->
+        <div id="laundry-tab-overview" class="laundry-tab-content">
+          <div id="laundry-overview-panel"></div>
+        </div>
+
+        <!-- Tab 2: Transfers & Logistics List -->
+        <div id="laundry-tab-transfers" class="laundry-tab-content" style="display:none;">
+          <div class="table-card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
+              <h4 style="font-size:14px; font-weight:800; color:var(--text-main); margin:0;"><i class="fa-solid fa-truck" style="color:var(--primary);"></i> طلبات شحن البياضات المتسخة للمغسلة</h4>
+              <button class="btn" onclick="openNewTransferModal()" style="font-size:12px; padding:8px 16px; margin-right:auto;">
+                <i class="fa-solid fa-plus"></i> إنشاء طلب شحن جديد
+              </button>
+            </div>
+            <div style="overflow-x:auto;">
+              <table>
+                <thead>
+                  <tr style="background:#f8fafc;">
+                    <th>رقم الحركة</th>
+                    <th>المستودع المصدر</th>
+                    <th>حالة الشحن</th>
+                    <th>ملاحظات</th>
+                    <th>تاريخ التسجيل</th>
+                    <th>الإجراءات</th>
+                  </tr>
+                </thead>
+                <tbody id="laundry-transfers-table-body">
+                  <!-- Loaded via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 3: Processing Cycles & Batches -->
+        <div id="laundry-tab-batches" class="laundry-tab-content" style="display:none;">
+          <div class="table-card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
+              <h4 style="font-size:14px; font-weight:800; color:var(--text-main); margin:0;"><i class="fa-solid fa-arrows-spin" style="color:var(--success);"></i> دورات تشغيل الغسالات والوصفات الكيميائية</h4>
+              <button class="btn" onclick="openNewBatchModal()" style="font-size:12px; padding:8px 16px; margin-right:auto; background:linear-gradient(135deg,#10b981,#059669);">
+                <i class="fa-solid fa-play"></i> بدء دورة تشغيل جديدة
+              </button>
+            </div>
+
+            <!-- Filters Section -->
+            <div style="display:flex; gap:10px; flex-wrap:wrap; background:#f8fafc; padding:12px; border-radius:10px; margin-bottom:15px; border:1px solid #e2e8f0; align-items:center;">
+              <div style="display:flex; align-items:center; gap:5px; font-size:12px; font-weight:800; color:var(--text-main);"><i class="fa-solid fa-filter" style="color:var(--primary);"></i> تصفية سريعة:</div>
+              <input type="text" id="l-batch-filter-search" class="input-control" placeholder="البحث برقم الدورة..." oninput="filterLaundryBatches()" style="width:200px; padding:8px; font-size:12px; background:#fff;">
+              <select id="l-batch-filter-type" class="table-select" onchange="filterLaundryBatches()" style="width:180px; padding:8px; font-size:12px; background:#fff;">
+                <option value="">جميع أنواع التشغيل</option>
+                <option value="PROGRAM">دورة آلية بالبرنامج</option>
+                <option value="MANUAL">تشغيل يدوي / وردية</option>
+                <option value="HYBRID">دورة برنامج وتعديل يدوي</option>
+              </select>
+              <select id="l-batch-filter-status" class="table-select" onchange="filterLaundryBatches()" style="width:140px; padding:8px; font-size:12px; background:#fff;">
+                <option value="">جميع الحالات</option>
+                <option value="Pending">قيد الانتظار</option>
+                <option value="Running">قيد التشغيل</option>
+                <option value="Completed">مكتملة</option>
+                <option value="Cancelled">ملغاة</option>
+              </select>
+            </div>
+
+            <div style="overflow-x:auto;">
+              <table>
+                <thead>
+                  <tr style="background:#f8fafc;">
+                    <th>رقم الدورة</th>
+                    <th>الغسالة</th>
+                    <th>برنامج التشغيل</th>
+                    <th>الوزن الكلي</th>
+                    <th>عدد القطع</th>
+                    <th>الحالة</th>
+                    <th>الإجراءات</th>
+                  </tr>
+                </thead>
+                <tbody id="laundry-batches-table-body">
+                  <!-- Loaded via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 4: Returns Reverse Logistics -->
+        <div id="laundry-tab-returns" class="laundry-tab-content" style="display:none;">
+          <div class="table-card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
+              <h4 style="font-size:14px; font-weight:800; color:var(--text-main); margin:0;"><i class="fa-solid fa-arrow-rotate-left" style="color:#ef4444;"></i> طلبات إرجاع البياضات النظيفة والمعقمة للمخازن</h4>
+              <button class="btn" onclick="openNewReturnModal()" style="font-size:12px; padding:8px 16px; margin-right:auto; background:linear-gradient(135deg,#3b82f6,#2563eb);">
+                <i class="fa-solid fa-reply"></i> إنشاء طلب إرجاع للمستودع
+              </button>
+            </div>
+            <div style="overflow-x:auto;">
+              <table>
+                <thead>
+                  <tr style="background:#f8fafc;">
+                    <th>رقم المرتجع</th>
+                    <th>شحنة المصدر</th>
+                    <th>الحالة</th>
+                    <th>ملاحظات</th>
+                    <th>تاريخ التسجيل</th>
+                    <th>الإجراءات</th>
+                  </tr>
+                </thead>
+                <tbody id="laundry-returns-table-body">
+                  <!-- Loaded via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 5: Guest & Staff tickets -->
+        <div id="laundry-tab-tickets" class="laundry-tab-content" style="display:none;">
+          <div class="table-card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
+              <h4 style="font-size:14px; font-weight:800; color:var(--text-main); margin:0;"><i class="fa-solid fa-receipt" style="color:var(--warning);"></i> تذاكر غسيل وكي ملابس النزلاء والموظفين</h4>
+              <!-- Manual creation is disabled because billing/tickets are synced automatically from Comsys POS -->
+            </div>
+
+            <!-- Filters Section -->
+            <div style="display:flex; gap:10px; flex-wrap:wrap; background:#f8fafc; padding:12px; border-radius:10px; margin-bottom:15px; border:1px solid #e2e8f0; align-items:center;">
+              <div style="display:flex; align-items:center; gap:5px; font-size:12px; font-weight:800; color:var(--text-main);"><i class="fa-solid fa-filter" style="color:var(--primary);"></i> تصفية سريعة:</div>
+              <input type="text" id="l-ticket-filter-search" class="input-control" placeholder="البحث باسم العميل أو الغرفة..." oninput="filterLaundryTickets()" style="width:240px; padding:8px; font-size:12px; background:#fff;">
+              <select id="l-ticket-filter-type" class="table-select" onchange="filterLaundryTickets()" style="width:140px; padding:8px; font-size:12px; background:#fff;">
+                <option value="">جميع الأنواع</option>
+                <option value="Guest">نزلاء (Guest)</option>
+                <option value="Staff">موظفين (Staff)</option>
+              </select>
+              <select id="l-ticket-filter-status" class="table-select" onchange="filterLaundryTickets()" style="width:140px; padding:8px; font-size:12px; background:#fff;">
+                <option value="">جميع الحالات</option>
+                <option value="Received">مستلمة</option>
+                <option value="Processing">قيد المعالجة</option>
+                <option value="Ready">جاهزة</option>
+                <option value="Delivered">تم التسليم</option>
+              </select>
+            </div>
+
+            <div style="overflow-x:auto;">
+              <table>
+                <thead>
+                  <tr style="background:#f8fafc;">
+                    <th>رقم التذكرة</th>
+                    <th>النوع</th>
+                    <th>اسم العميل</th>
+                    <th>الغرفة</th>
+                    <th>الحالة</th>
+                    <th>التاريخ والوقت</th>
+                    <th>الإجراءات</th>
+                  </tr>
+                </thead>
+                <tbody id="laundry-tickets-table-body">
+                  <!-- Loaded via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 6: Reconciliation Balance Reports -->
+        <div id="laundry-tab-reconciliation" class="laundry-tab-content" style="display:none;">
+          <div class="table-card" style="padding:20px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #f1f5f9; padding-bottom:10px;">
+              <h4 style="font-size:14px; font-weight:800; color:var(--text-main); margin:0;"><i class="fa-solid fa-clipboard-check" style="color:var(--primary);"></i> تقرير مطابقة الأرصدة (الشحن - المرتجع - الهالك)</h4>
+              <span style="font-size:11px; color:var(--text-muted);"><i class="fa-solid fa-circle-info"></i> المعادلة الحاكمة: الكمية المرسلة = المرتجعة + الهالك + قيد التشغيل</span>
+            </div>
+            <div style="overflow-x:auto;">
+              <table>
+                <thead>
+                  <tr style="background:#f8fafc;">
+                    <th style="width:40px;">الإنذار</th>
+                    <th>اسم الصنف</th>
+                    <th>رمز الصنف</th>
+                    <th>المرسل الكلي</th>
+                    <th>المرتجع المؤكد</th>
+                    <th>التالف والهالك</th>
+                    <th>قيد التشغيل</th>
+                    <th>الفارق / التباين</th>
+                  </tr>
+                </thead>
+                <tbody id="laundry-recon-table-body">
+                  <!-- Loaded via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 8: Laundry Inventory Stock -->
+        <div id="laundry-tab-stock" class="laundry-tab-content" style="display:none;">
+          <div class="table-card" style="padding:20px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #f1f5f9; padding-bottom:10px;">
+              <h4 style="font-size:14px; font-weight:800; color:var(--text-main); margin:0;"><i class="fa-solid fa-warehouse" style="color:var(--primary);"></i> رصيد المخزون الفعلي بالمغسلة (بياضات ومنظفات)</h4>
+              <input type="text" id="l-stock-search" class="input-control" placeholder="البحث باسم أو كود الصنف..." oninput="filterLaundryStock()" style="width:250px; padding:8px; font-size:12px; background:#fff;">
+            </div>
+            <div style="overflow-x:auto;">
+              <table>
+                <thead>
+                  <tr style="background:#f8fafc;">
+                    <th>كود الصنف</th>
+                    <th>اسم الصنف</th>
+                    <th>نوع الصنف</th>
+                    <th>الوحدة</th>
+                    <th>الوارد الكلي</th>
+                    <th>المرتجع الكلي</th>
+                    <th>المستهلك بالتشغيل</th>
+                    <th>الهالك والتالف</th>
+                    <th>الرصيد الحالي بالمغسلة</th>
+                  </tr>
+                </thead>
+                <tbody id="laundry-stock-table-body">
+                  <!-- Loaded via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 7: Programs & Recipes Configurations -->
+        <div id="laundry-tab-configurations" class="laundry-tab-content" style="display:none;">
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+            <!-- Left: Washing Programs Panel -->
+            <div class="table-card" style="padding:20px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #f1f5f9; padding-bottom:10px;">
+                <h4 style="font-size:14px; font-weight:800; color:var(--text-main); margin:0;"><i class="fa-solid fa-list-check" style="color:var(--primary);"></i> برامج تشغيل الغسالات</h4>
+                <button class="btn" onclick="openNewProgramModal()" style="font-size:11px; padding:6px 12px; background:linear-gradient(135deg,#6366f1,#4f46e5);">
+                  <i class="fa-solid fa-plus"></i> إضافة برنامج جديد
+                </button>
+              </div>
+              <div style="overflow-x:auto;">
+                <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                  <thead>
+                    <tr style="background:#f8fafc;">
+                      <th style="padding:10px; border-bottom:1px solid #e2e8f0;">اسم البرنامج</th>
+                      <th style="padding:10px; border-bottom:1px solid #e2e8f0;">الغسالة</th>
+                      <th style="padding:10px; border-bottom:1px solid #e2e8f0;">السعة (موصى بها / قصوى)</th>
+                      <th style="padding:10px; border-bottom:1px solid #e2e8f0;">المعايير (المدة/الحرارة/الماء/السرعة)</th>
+                      <th style="padding:10px; border-bottom:1px solid #e2e8f0; width:60px;">الحالة</th>
+                      <th style="padding:10px; border-bottom:1px solid #e2e8f0; width:80px; text-align:center;">الإجراءات</th>
+                    </tr>
+                  </thead>
+                  <tbody id="laundry-programs-table-body">
+                    <!-- Loaded via JS -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Right: Chemical Recipes Panel -->
+            <div class="table-card" style="padding:20px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #f1f5f9; padding-bottom:10px;">
+                <h4 style="font-size:14px; font-weight:800; color:var(--text-main); margin:0;"><i class="fa-solid fa-flask" style="color:#ef4444;"></i> الوصفات الكيميائية للبرامج</h4>
+                <button class="btn" onclick="openNewRecipeModal()" style="font-size:11px; padding:6px 12px; background:linear-gradient(135deg,#ef4444,#dc2626);">
+                  <i class="fa-solid fa-plus"></i> إضافة وصفة جديدة
+                </button>
+              </div>
+              <div style="overflow-x:auto;">
+                <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                  <thead>
+                    <tr style="background:#f8fafc;">
+                      <th style="padding:10px; border-bottom:1px solid #e2e8f0;">اسم الوصفة</th>
+                      <th style="padding:10px; border-bottom:1px solid #e2e8f0;">طريقة الاستهلاك</th>
+                      <th style="padding:10px; border-bottom:1px solid #e2e8f0;">الوصف</th>
+                      <th style="padding:10px; border-bottom:1px solid #e2e8f0; width:80px;">الحالة</th>
+                      <th style="padding:10px; border-bottom:1px solid #e2e8f0; width:80px; text-align:center;">الإجراءات</th>
+                    </tr>
+                  </thead>
+                  <tbody id="laundry-recipes-table-body">
+                    <!-- Loaded via JS -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ===== VIEW 7: USER MANAGEMENT (Admin Only) ===== -->
+    <div class="split-area" id="users-view" style="display:none; grid-template-columns:1fr;">
+      <div class="details-panel" style="max-width:1200px; margin:0 auto; width:100%; display:flex; flex-direction:column; gap:24px;">
+
+        <!-- Page Header -->
+        <div>
+          <div class="selected-node-path">الإدارة / إدارة المستخدمين</div>
+          <div class="selected-node-title"><i class="fa-solid fa-users-gear"></i> إدارة المستخدمين والصلاحيات</div>
+        </div>
+
+        <!-- Stats Row -->
+        <div class="stats-grid" id="users-stats-grid" style="grid-template-columns:repeat(4,1fr);">
+          <div class="stat-card" style="border-right:4px solid var(--primary);">
+            <h3>إجمالي المستخدمين</h3>
+            <div class="value" id="stat-total-users">0</div>
+          </div>
+          <div class="stat-card" style="border-right:4px solid #10b981;">
+            <h3>حسابات نشطة</h3>
+            <div class="value" style="color:#10b981;" id="stat-active-users">0</div>
+          </div>
+          <div class="stat-card" style="border-right:4px solid #f59e0b;">
+            <h3>حسابات معطلة</h3>
+            <div class="value" style="color:#f59e0b;" id="stat-inactive-users">0</div>
+          </div>
+          <div class="stat-card" style="border-right:4px solid #ef4444;">
+            <h3>حسابات مقفولة</h3>
+            <div class="value" style="color:#ef4444;" id="stat-locked-users">0</div>
+          </div>
+        </div>
+
+        <!-- Actions Bar -->
+        <div class="table-card">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+            <div style="display:flex; gap:10px; align-items:center;">
+              <input type="text" id="users-search" class="table-search-input" placeholder="ابحث باسم أو اسم مستخدم..." oninput="renderUsersTable()" style="width:250px;">
+              <select id="users-role-filter" class="table-select" onchange="renderUsersTable()">
+                <option value="all">كل الأدوار</option>
+                <option value="admin">مدير النظام</option>
+                <option value="manager">مدير عام</option>
+                <option value="warehouse_manager">مدير مستودع</option>
+                <option value="warehouse_head">رئيس عهدة</option>
+                <option value="accountant">محاسب</option>
+                <option value="staff">موظف مستودع</option>
+              </select>
+              <select id="users-status-filter" class="table-select" onchange="renderUsersTable()">
+                <option value="all">كل الحالات</option>
+                <option value="active">نشط</option>
+                <option value="inactive">معطل</option>
+                <option value="locked">مقفول</option>
+              </select>
+            </div>
+            <button class="btn" id="btn-create-user" onclick="openCreateUserModal()" style="background:linear-gradient(135deg,#6366f1,#8b5cf6); font-size:13px; padding:10px 20px;">
+              <i class="fa-solid fa-user-plus"></i> إضافة مستخدم جديد
+            </button>
+          </div>
+        </div>
+
+        <!-- Users Table -->
+        <div class="table-card">
+          <div style="overflow-x:auto;">
+            <table id="users-table">
+              <thead>
+                <tr style="background:#f8fafc;">
+                  <th>المستخدم</th>
+                  <th>اسم الدخول</th>
+                  <th>الدور والصلاحية</th>
+                  <th>المستودع المخصص</th>
+                  <th>الحالة</th>
+                  <th>آخر دخول</th>
+                  <th>الإجراءات</th>
+                </tr>
+              </thead>
+              <tbody id="users-table-body">
+                <tr><td colspan="7" style="text-align:center; padding:30px; color:var(--text-muted);">جاري تحميل المستخدمين...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ===== VIEW 8: PERMISSIONS MATRIX (Admin Only) ===== -->
+    <div class="split-area" id="permissions-view" style="display:none; grid-template-columns:1fr;">
+      <div class="details-panel" style="max-width:1400px; margin:0 auto; width:100%; display:flex; flex-direction:column; gap:24px;">
+
+        <!-- Page Header -->
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+          <div>
+            <div class="selected-node-path">الإدارة / إدارة الصلاحيات</div>
+            <div class="selected-node-title"><i class="fa-solid fa-shield-halved"></i> مصفوفة صلاحيات الأدوار</div>
+          </div>
+          <div style="display:flex; gap:10px;">
+            <button class="btn" id="btn-save-permissions" onclick="savePermissionsMatrix()" style="background:linear-gradient(135deg,#10b981,#059669); font-size:13px; padding:10px 24px;">
+              <i class="fa-solid fa-floppy-disk"></i> حفظ التعديلات
+            </button>
+            <button class="btn btn-secondary" onclick="loadPermissionsMatrix()" style="font-size:13px; padding:10px 18px;">
+              <i class="fa-solid fa-rotate"></i> إعادة تحميل
+            </button>
+          </div>
+        </div>
+
+        <!-- Legend -->
+        <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap; background:#f8fafc; border-radius:12px; padding:14px 18px; border:1px solid #e2e8f0;">
+          <span style="font-size:12px; font-weight:700; color:var(--text-muted);"><i class="fa-solid fa-circle-info"></i> مفتاح:</span>
+          <span style="display:flex; align-items:center; gap:6px; font-size:12px;"><span style="width:20px; height:20px; background:#10b981; border-radius:5px; display:inline-block;"></span> مسموح</span>
+          <span style="display:flex; align-items:center; gap:6px; font-size:12px;"><span style="width:20px; height:20px; background:#e2e8f0; border-radius:5px; display:inline-block; border:2px solid #cbd5e1;"></span> ممنوع</span>
+          <span style="margin-right:auto; font-size:11px; color:var(--text-muted);">انقر على أي مربع لتغيير الصلاحية — ثم اضغط «حفظ التعديلات»</span>
+        </div>
+
+        <!-- Permissions Matrix Table -->
+        <div class="table-card" style="overflow-x:auto; padding:0;">
+          <table id="permissions-matrix-table" style="width:100%; border-collapse:separate; border-spacing:0; font-size:13px;">
+            <thead id="permissions-matrix-head"></thead>
+            <tbody id="permissions-matrix-body"></tbody>
+          </table>
+        </div>
+
+        <!-- Change log area -->
+        <div id="permissions-change-log" style="display:none; background:#fffbeb; border:1px solid #fde68a; border-radius:12px; padding:14px 18px;">
+          <div style="font-weight:700; font-size:13px; color:#d97706; margin-bottom:8px;"><i class="fa-solid fa-triangle-exclamation"></i> تغييرات غير محفوظة:</div>
+          <ul id="permissions-change-list" style="margin:0; padding-right:18px; color:#92400e; font-size:12px; line-height:1.8;"></ul>
+        </div>
+
+      </div>
+    </div>
+
+  </div> <!-- Closed main-layout div -->
+
+  <!-- ===== CREATE USER MODAL ===== -->
+  <div id="create-user-modal" class="modal-overlay" style="display:none; z-index:1200;">
+    <div class="modal-card" style="max-width:540px;">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div style="background:linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px;">
+            <i class="fa-solid fa-user-plus"></i>
+          </div>
+          <div>
+            <h3 style="font-size:16px; font-weight:800;">إضافة مستخدم جديد</h3>
+            <p style="font-size:11px; color:var(--text-muted); margin:0;">أدخل بيانات الحساب والصلاحيات</p>
+          </div>
+        </div>
+        <button class="modal-close-btn" onclick="closeCreateUserModal()">&times;</button>
+      </div>
+
+      <form id="create-user-form" style="display:flex; flex-direction:column; gap:14px; margin-top:10px;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:12px; font-weight:700;">اسم الدخول (Username)</label>
+            <div class="input-wrapper" style="margin-top:5px;">
+              <i class="fa-solid fa-at"></i>
+              <input type="text" id="cu-username" class="input-control" placeholder="مثال: ahmed.store" required>
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:12px; font-weight:700;">كلمة المرور</label>
+            <div class="input-wrapper" style="margin-top:5px;">
+              <i class="fa-solid fa-lock"></i>
+              <input type="password" id="cu-password" class="input-control" placeholder="6 أحرف على الأقل" required>
+            </div>
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label style="font-size:12px; font-weight:700;">الاسم الكامل (عربي)</label>
+          <div class="input-wrapper" style="margin-top:5px;">
+            <i class="fa-solid fa-user"></i>
+            <input type="text" id="cu-fullname" class="input-control" placeholder="مثال: أحمد محمود السيد" required>
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:12px; font-weight:700;">الدور والصلاحية</label>
+            <select id="cu-role" class="table-select" style="width:100%; padding:10px; margin-top:5px;" onchange="onRoleChangeCreate()" required>
+              <option value="">اختر الدور...</option>
+              <option value="admin">👑 مدير النظام</option>
+              <option value="manager">🏢 مدير عام</option>
+              <option value="warehouse_manager">🏬 مدير مستودع</option>
+              <option value="warehouse_head">📦 رئيس عهدة</option>
+              <option value="accountant">💼 محاسب</option>
+              <option value="staff">👷 موظف مستودع</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0;" id="cu-node-group">
+            <label style="font-size:12px; font-weight:700;">المستودع الرئيسي الافتراضي</label>
+            <select id="cu-node" class="table-select" style="width:100%; padding:10px; margin-top:5px;">
+              <option value="">بدون مستودع محدد</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label style="font-size:12px; font-weight:700;">مستودعات إضافية مسموح بها</label>
+          <div id="cu-other-nodes-container" style="max-height:120px; overflow-y:auto; border:1px solid var(--card-border); border-radius:8px; padding:10px; margin-top:5px; display:flex; flex-direction:column; gap:6px; background:#fafafa; text-align:right;">
+            <!-- will be populated in javascript -->
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px; background:#f0fdf4; border:1px solid #86efac; border-radius:10px; padding:10px 14px;">
+          <input type="checkbox" id="cu-active" checked style="width:16px; height:16px; accent-color:var(--primary);">
+          <label for="cu-active" style="font-size:13px; font-weight:700; cursor:pointer;">الحساب نشط فور الإنشاء</label>
+        </div>
+        <div style="display:flex; gap:10px; margin-top:5px;">
+          <button type="submit" class="btn" style="flex:1; background:linear-gradient(135deg,#6366f1,#8b5cf6); padding:13px;">
+            <i class="fa-solid fa-user-plus"></i> إنشاء الحساب
+          </button>
+          <button type="button" class="btn btn-secondary" onclick="closeCreateUserModal()" style="padding:13px 20px;">إلغاء</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== EDIT USER MODAL ===== -->
+  <div id="edit-user-modal" class="modal-overlay" style="display:none; z-index:1200;">
+    <div class="modal-card" style="max-width:540px;">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div style="background:linear-gradient(135deg,#f59e0b,#ef4444); color:#fff; width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px;">
+            <i class="fa-solid fa-user-pen"></i>
+          </div>
+          <div>
+            <h3 style="font-size:16px; font-weight:800;">تعديل بيانات المستخدم</h3>
+            <p style="font-size:11px; color:var(--text-muted); margin:0;" id="eu-username-label">@username</p>
+          </div>
+        </div>
+        <button class="modal-close-btn" onclick="closeEditUserModal()">&times;</button>
+      </div>
+
+      <form id="edit-user-form" style="display:flex; flex-direction:column; gap:14px; margin-top:10px;">
+        <input type="hidden" id="eu-user-id">
+        <div class="form-group" style="margin-bottom:0;">
+          <label style="font-size:12px; font-weight:700;">الاسم الكامل (عربي)</label>
+          <div class="input-wrapper" style="margin-top:5px;">
+            <i class="fa-solid fa-user"></i>
+            <input type="text" id="eu-fullname" class="input-control" required>
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:12px; font-weight:700;">الدور والصلاحية</label>
+            <select id="eu-role" class="table-select" style="width:100%; padding:10px; margin-top:5px;" required>
+              <option value="admin">👑 مدير النظام</option>
+              <option value="manager">🏢 مدير عام</option>
+              <option value="warehouse_manager">🏬 مدير مستودع</option>
+              <option value="warehouse_head">📦 رئيس عهدة</option>
+              <option value="accountant">💼 محاسب</option>
+              <option value="staff">👷 موظف مستودع</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:12px; font-weight:700;">المستودع الرئيسي الافتراضي</label>
+            <select id="eu-node" class="table-select" style="width:100%; padding:10px; margin-top:5px;">
+              <option value="">بدون مستودع محدد</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:0; margin-top:5px;">
+          <label style="font-size:12px; font-weight:700;">مستودعات إضافية مسموح بها</label>
+          <div id="eu-other-nodes-container" style="max-height:120px; overflow-y:auto; border:1px solid var(--card-border); border-radius:8px; padding:10px; margin-top:5px; display:flex; flex-direction:column; gap:6px; background:#fafafa; text-align:right;">
+            <!-- will be populated in javascript -->
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px; background:#f0fdf4; border:1px solid #86efac; border-radius:10px; padding:10px 14px;">
+          <input type="checkbox" id="eu-active" style="width:16px; height:16px; accent-color:var(--primary);">
+          <label for="eu-active" style="font-size:13px; font-weight:700; cursor:pointer;">الحساب نشط</label>
+        </div>
+        <div style="display:flex; gap:10px; margin-top:5px;">
+          <button type="submit" class="btn" style="flex:1; background:linear-gradient(135deg,#f59e0b,#ef4444); padding:13px;">
+            <i class="fa-solid fa-floppy-disk"></i> حفظ التعديلات
+          </button>
+          <button type="button" class="btn btn-secondary" onclick="closeEditUserModal()" style="padding:13px 20px;">إلغاء</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== RESET PASSWORD MODAL ===== -->
+  <div id="reset-pw-modal" class="modal-overlay" style="display:none; z-index:1200;">
+    <div class="modal-card" style="max-width:440px;">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div style="background:linear-gradient(135deg,#ef4444,#b91c1c); color:#fff; width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px;">
+            <i class="fa-solid fa-key"></i>
+          </div>
+          <div>
+            <h3 style="font-size:16px; font-weight:800;">إعادة تعيين كلمة المرور</h3>
+            <p style="font-size:11px; color:var(--text-muted); margin:0;" id="rp-username-label">@username</p>
+          </div>
+        </div>
+        <button class="modal-close-btn" onclick="closeResetPwModal()">&times;</button>
+      </div>
+      <div style="background:#fef2f2; border:1px solid #fecaca; border-radius:10px; padding:10px 14px; font-size:12px; color:#b91c1c; margin-top:10px; display:flex; gap:8px;">
+        <i class="fa-solid fa-triangle-exclamation" style="color:#ef4444;"></i>
+        ستحل كلمة المرور الجديدة محل القديمة فوراً بدون الحاجة للقديمة.
+      </div>
+      <form id="reset-pw-form" style="display:flex; flex-direction:column; gap:14px; margin-top:14px;">
+        <input type="hidden" id="rp-user-id">
+        <div class="form-group" style="margin-bottom:0;">
+          <label style="font-size:12px; font-weight:700;">كلمة المرور الجديدة</label>
+          <div class="input-wrapper" style="margin-top:5px;">
+            <i class="fa-solid fa-lock"></i>
+            <input type="password" id="rp-new-password" class="input-control" placeholder="6 أحرف على الأقل" required>
+          </div>
+        </div>
+        <div style="display:flex; gap:10px;">
+          <button type="submit" class="btn" style="flex:1; background:linear-gradient(135deg,#ef4444,#b91c1c); padding:13px;">
+            <i class="fa-solid fa-key"></i> إعادة تعيين
+          </button>
+          <button type="button" class="btn btn-secondary" onclick="closeResetPwModal()" style="padding:13px 20px;">إلغاء</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  </div>
+
+  <!-- ===== LAUNDRY TRANSFERS MODAL ===== -->
+  <div id="laundry-transfer-modal" class="modal-overlay" style="display:none; z-index:1200;">
+    <div class="modal-card" style="max-width:600px;">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div style="background:linear-gradient(135deg, #2563eb, #3b82f6); color:#fff; width:38px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px;">
+            <i class="fa-solid fa-truck"></i>
+          </div>
+          <div>
+            <h3 style="font-size:16px; font-weight:800;">شحن بياضات متسخة للمغسلة</h3>
+            <p style="font-size:11px; color:var(--text-muted); margin:0;">إنشاء طلب تحويل بياضات للمغسلة</p>
+          </div>
+        </div>
+        <button class="modal-close-btn" onclick="closeLaundryModal('laundry-transfer-modal')">&times;</button>
+      </div>
+
+      <form id="l-new-tf-form" onsubmit="submitLaundryTransfer(event)" style="display:flex; flex-direction:column; gap:12px; margin-top:10px;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label style="font-size:12px; font-weight:700;">المستودع المصدر (المصدر)</label>
+          <select id="l-new-tf-source" class="table-select" style="width:100%; padding:10px; margin-top:5px;" required></select>
+        </div>
+
+        <div class="form-group" style="margin-bottom:0;">
+          <label style="font-size:12px; font-weight:700;">ملاحظات طلب الشحن</label>
+          <input type="text" id="l-new-tf-notes" class="input-control" placeholder="أدخل أي ملاحظات خاصة بالشحن..." style="margin-top:5px;">
+        </div>
+
+        <div style="border-top:1px solid #f1f5f9; padding-top:10px; margin-top:5px;">
+          <div style="font-size:12px; font-weight:700; margin-bottom:8px; color:var(--primary);"><i class="fa-solid fa-plus-circle"></i> إضافة أصناف الشحنة</div>
+          <div style="display:grid; grid-template-columns: 2fr 100px 50px; gap:10px; align-items:flex-end;">
+            <div class="form-group" style="margin-bottom:0;">
+              <select id="l-new-tf-item-select" class="table-select" style="width:100%; padding:10px;"></select>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <input type="number" id="l-new-tf-item-qty" class="input-control" placeholder="الكمية" style="padding:10px;">
+            </div>
+            <button type="button" class="btn" onclick="addLinenTransferLine()" style="padding:11px;"><i class="fa-solid fa-plus"></i></button>
+          </div>
+        </div>
+
+        <!-- Selected items table -->
+        <div style="max-height:140px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:8px;">
+          <table style="font-size:12px; width:100%;">
+            <thead>
+              <tr style="background:#f8fafc;">
+                <th style="padding:8px;">اسم الصنف</th>
+                <th style="padding:8px; width:100px;">الكمية المرسلة</th>
+                <th style="padding:8px; width:100px;">قيمة التكلفة</th>
+                <th style="padding:8px; width:50px;">حذف</th>
+              </tr>
+            </thead>
+            <tbody id="l-new-tf-lines-body">
+              <tr>
+                <td colspan="4" style="text-align:center; color:var(--text-muted); padding:10px;">لم يتم إضافة أصناف للشحنة بعد</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div style="display:flex; gap:10px; justify-content:flex-end; border-top:1px solid #f1f5f9; padding-top:10px; margin-top:5px;">
+          <button type="submit" class="btn" style="background:var(--primary); padding:10px 20px;">حفظ كطلب مسودة</button>
+          <button type="button" class="btn btn-secondary" onclick="closeLaundryModal('laundry-transfer-modal')" style="padding:10px 15px;">إلغاء</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== LAUNDRY RECEIVING MODAL ===== -->
+  <div id="laundry-receiving-modal" class="modal-overlay" style="display:none; z-index:1200;">
+    <div class="modal-card" style="max-width:700px;">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div style="background:linear-gradient(135deg, #10b981, #059669); color:#fff; width:38px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px;">
+            <i class="fa-solid fa-file-signature"></i>
+          </div>
+          <div>
+            <h3 style="font-size:16px; font-weight:800;">فحص واستلام شحنة متسخ بالمغسلة</h3>
+            <p style="font-size:11px; color:var(--text-muted); margin:0;">إثبات الأعداد الفعلية الواردة وتأكيد العجز التالف</p>
+          </div>
+        </div>
+        <button class="modal-close-btn" onclick="closeLaundryModal('laundry-receiving-modal')">&times;</button>
+      </div>
+
+      <form id="l-receive-form" onsubmit="submitLaundryReceiving(event)" style="display:flex; flex-direction:column; gap:12px; margin-top:10px;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label style="font-size:12px; font-weight:700;">ملاحظات الاستلام</label>
+          <input type="text" id="l-receive-notes" class="input-control" placeholder="أدخل أي ملاحظات خاصة بالفرز والاستلام..." style="margin-top:5px;">
+        </div>
+
+        <div style="max-height:250px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:8px; margin-top:5px;">
+          <table style="font-size:12px; width:100%;">
+            <thead>
+              <tr style="background:#f8fafc;">
+                <th style="padding:8px;">اسم الصنف</th>
+                <th style="padding:8px; width:80px;">المرسل</th>
+                <th style="padding:8px; width:100px;">المستلم الفعلي</th>
+                <th style="padding:8px; width:120px;">سبب العجز / الرفض</th>
+                <th style="padding:8px;">تفاصيل إضافية</th>
+              </tr>
+            </thead>
+            <tbody id="l-receive-items-body"></tbody>
+          </table>
+        </div>
+
+        <div style="display:flex; gap:10px; justify-content:flex-end; border-top:1px solid #f1f5f9; padding-top:10px;">
+          <button type="submit" class="btn" style="background:var(--success); padding:10px 24px;">تأكيد وحفظ الاستلام الفعلي</button>
+          <button type="button" class="btn btn-secondary" onclick="closeLaundryModal('laundry-receiving-modal')" style="padding:10px 15px;">إلغاء</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== LAUNDRY BATCH MODAL ===== -->
+  <div id="laundry-batch-modal" class="modal-overlay" style="display:none; z-index:1200;">
+    <div class="modal-card" style="max-width:850px;">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div style="background:linear-gradient(135deg, #10b981, #3b82f6); color:#fff; width:38px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px;">
+            <i class="fa-solid fa-arrows-spin"></i>
+          </div>
+          <div>
+            <h3 style="font-size:16px; font-weight:800;">دورة غسيل ومعالجة جديدة</h3>
+            <p style="font-size:11px; color:var(--text-muted); margin:0;">تسجيل معايير تشغيل الغسالات واستهلاك المنظفات</p>
+          </div>
+        </div>
+        <button class="modal-close-btn" onclick="closeLaundryModal('laundry-batch-modal')">&times;</button>
+      </div>
+
+      <form id="l-new-batch-form" onsubmit="submitLaundryBatch(event)" style="display:flex; flex-direction:column; gap:12px; margin-top:10px;">
+        <div style="display:grid; grid-template-columns:1.5fr 1fr 1fr 1fr; gap:12px;">
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:12px; font-weight:700;">نوع تشغيل الدورة</label>
+            <select id="l-batch-run-type" class="table-select" style="width:100%; padding:10px; margin-top:5px;" onchange="onBatchRunTypeChange()" required>
+              <option value="PROGRAM">دورة آلية بالبرنامج (PROGRAM)</option>
+              <option value="MANUAL">تشغيل يدوي / وردية كاملة (MANUAL)</option>
+              <option value="HYBRID">دورة برنامج وتعديل يدوي (HYBRID)</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:12px; font-weight:700;">رقم أمر التشغيل</label>
+            <input type="text" id="l-batch-number" class="input-control" readonly style="margin-top:5px; background:#f1f5f9; font-weight:700; color:var(--primary);">
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:12px; font-weight:700;">إجمالي الوزن (كجم)</label>
+            <input type="number" id="l-batch-weight" class="input-control" placeholder="مثال: 45" style="margin-top:5px;" min="0.1" step="0.1" required>
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:12px; font-weight:700;">إجمالي القطع</label>
+            <input type="number" id="l-batch-pieces" class="input-control" placeholder="مثال: 340" style="margin-top:5px;" min="1" required>
+          </div>
+        </div>
+
+        <!-- Automation Fields (Machine & Program selector) -->
+        <div id="l-batch-automation-fields" style="display:grid; grid-template-columns:1fr 1fr; gap:12px; background:#f8fafc; padding:12px; border-radius:8px; border:1px solid #e2e8f0; margin-bottom:5px;">
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:12px; font-weight:700; color:var(--text-main);">الغسالة المستخدمة</label>
+            <select id="l-batch-machine" class="table-select" style="width:100%; padding:10px; margin-top:5px;" onchange="onBatchMachineChange()"></select>
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:12px; font-weight:700; color:var(--text-main);">برنامج الغسيل (تلقائي الوصفة)</label>
+            <select id="l-batch-program" class="table-select" style="width:100%; padding:10px; margin-top:5px;" onchange="onBatchProgramChange()">
+              <option value="">اختر الغسالة أولاً...</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Linens table -->
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; border-top:1px solid #f1f5f9; padding-top:10px;">
+          <!-- Linens Items Input / Output mapping -->
+          <div>
+            <div style="font-size:12px; font-weight:700; margin-bottom:8px; color:var(--primary);"><i class="fa-solid fa-bed"></i> أصناف البياضات بالدورة</div>
+            <div style="display:grid; grid-template-columns: 2fr 80px 100px 40px; gap:8px; align-items:flex-end; margin-bottom:8px;">
+              <select id="l-batch-linen-select" class="table-select" style="width:100%; padding:8px; font-size:11px;"></select>
+              <input type="number" id="l-batch-linen-qty" class="input-control" placeholder="الكمية" style="padding:8px; font-size:11px;">
+              <select id="l-batch-linen-role" class="table-select" style="width:100%; padding:8px; font-size:11px;">
+                <option value="INPUT">متسخ وارد (INPUT)</option>
+                <option value="OUTPUT">نظيف جاهز (OUTPUT)</option>
+                <option value="SCRAP">هالك ممزق (SCRAP)</option>
+              </select>
+              <button type="button" class="btn" onclick="addLinenToBatch()" style="padding:9px;"><i class="fa-solid fa-plus"></i></button>
+            </div>
+            <div style="max-height:120px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:8px;">
+              <table style="font-size:11px; width:100%;">
+                <thead>
+                  <tr style="background:#f8fafc;">
+                    <th style="padding:6px;">اسم الصنف</th>
+                    <th style="padding:6px; width:60px;">الكمية</th>
+                    <th style="padding:6px; width:80px;">الدور</th>
+                    <th style="padding:6px; width:40px;">حذف</th>
+                  </tr>
+                </thead>
+                <tbody id="l-batch-linens-body"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Chemicals Input mapping -->
+          <div>
+            <div style="font-size:12px; font-weight:700; margin-bottom:8px; color:var(--warning);"><i class="fa-solid fa-flask"></i> منظفات ومواد كيميائية مستهلكة</div>
+            <div id="l-batch-chem-read-only-msg" style="font-size:11px; color:var(--text-muted); margin-bottom:8px; background:#eff6ff; padding:8px; border-radius:6px; border:1px solid #bfdbfe; display:none;">
+              <i class="fa-solid fa-info-circle"></i> يتم سحب وضخ الكيماويات تلقائياً من مضخات الغسيل وفق برنامج التشغيل المختار.
+            </div>
+            <div id="l-batch-chem-adder-section" style="display:grid; grid-template-columns: 2fr 100px 40px; gap:8px; align-items:flex-end; margin-bottom:8px;">
+              <select id="l-batch-chem-select" class="table-select" style="width:100%; padding:8px; font-size:11px;"></select>
+              <input type="number" id="l-batch-chem-qty" class="input-control" placeholder="اللترات" style="padding:8px; font-size:11px;" step="0.01">
+              <button type="button" class="btn" onclick="addChemToBatch()" style="padding:9px; background:var(--warning);"><i class="fa-solid fa-plus"></i></button>
+            </div>
+            <div style="max-height:120px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:8px;">
+              <table style="font-size:11px; width:100%;">
+                <thead>
+                  <tr style="background:#f8fafc;">
+                    <th style="padding:6px;">اسم المنظف</th>
+                    <th style="padding:6px; width:80px;">الكمية الفعلية</th>
+                    <th style="padding:6px; width:40px;">حذف</th>
+                  </tr>
+                </thead>
+                <tbody id="l-batch-chems-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:10px; justify-content:flex-end; border-top:1px solid #f1f5f9; padding-top:10px;">
+          <button type="submit" class="btn" style="background:var(--success); padding:10px 24px;">حفظ وتشغيل دورة الغسيل</button>
+          <button type="button" class="btn btn-secondary" onclick="closeLaundryModal('laundry-batch-modal')" style="padding:10px 15px;">إلغاء</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== LAUNDRY RETURN TO WAREHOUSE MODAL ===== -->
+  <div id="laundry-return-modal" class="modal-overlay" style="display:none; z-index:1200;">
+    <div class="modal-card" style="max-width:600px;">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div style="background:linear-gradient(135deg, #3b82f6, #2563eb); color:#fff; width:38px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px;">
+            <i class="fa-solid fa-reply"></i>
+          </div>
+          <div>
+            <h3 style="font-size:16px; font-weight:800;">إرجاع بياضات نظيفة للمستودع</h3>
+            <p style="font-size:11px; color:var(--text-muted); margin:0;">تسجيل بياضات جاهزة للعودة إلى عهدة الفندق</p>
+          </div>
+        </div>
+        <button class="modal-close-btn" onclick="closeLaundryModal('laundry-return-modal')">&times;</button>
+      </div>
+
+      <form id="l-new-rtn-form" onsubmit="submitLaundryReturnDraft(event)" style="display:flex; flex-direction:column; gap:12px; margin-top:10px;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label style="font-size:12px; font-weight:700;">الشحنة المصدر (رقم إثبات الوارد للمغسلة)</label>
+          <select id="l-rtn-transfer-select" class="table-select" style="width:100%; padding:10px; margin-top:5px;" onchange="onReturnTransferChange()" required></select>
+        </div>
+
+        <div class="form-group" style="margin-bottom:0;">
+          <label style="font-size:12px; font-weight:700;">ملاحظات الإرجاع</label>
+          <input type="text" id="l-rtn-notes" class="input-control" placeholder="أدخل أي تفاصيل خاصة بالإرجاع..." style="margin-top:5px;">
+        </div>
+
+        <div style="max-height:200px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:8px; margin-top:5px;">
+          <table style="font-size:12px; width:100%;">
+            <thead>
+              <tr style="background:#f8fafc;">
+                <th style="padding:8px;">اسم الصنف المتاح بالمغسلة</th>
+                <th style="padding:8px; width:150px;">الرصيد المتبقي</th>
+                <th style="padding:8px; width:120px;">الكمية المرجعة للمستودع</th>
+              </tr>
+            </thead>
+            <tbody id="l-rtn-items-body"></tbody>
+          </table>
+        </div>
+
+        <div style="display:flex; gap:10px; justify-content:flex-end; border-top:1px solid #f1f5f9; padding-top:10px;">
+          <button type="submit" class="btn" style="background:var(--primary); padding:10px 24px;">إنشاء مستند المرتجع</button>
+          <button type="button" class="btn btn-secondary" onclick="closeLaundryModal('laundry-return-modal')" style="padding:10px 15px;">إلغاء</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== LAUNDRY VERIFY RETURN MODAL ===== -->
+  <div id="laundry-verify-return-modal" class="modal-overlay" style="display:none; z-index:1200;">
+    <div class="modal-card" style="max-width:700px;">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div style="background:linear-gradient(135deg, #10b981, #059669); color:#fff; width:38px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px;">
+            <i class="fa-solid fa-clipboard-check"></i>
+          </div>
+          <div>
+            <h3 style="font-size:16px; font-weight:800;">تأكيد وفحص مرتجعات المغسلة بالمستودع</h3>
+            <p style="font-size:11px; color:var(--text-muted); margin:0;">تسجيل الوارد الفعلي وتأكيد هدر الغسيل</p>
+          </div>
+        </div>
+        <button class="modal-close-btn" onclick="closeLaundryModal('laundry-verify-return-modal')">&times;</button>
+      </div>
+
+      <form id="l-verify-rtn-form" onsubmit="event.preventDefault();" style="display:flex; flex-direction:column; gap:12px; margin-top:10px;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label style="font-size:12px; font-weight:700;">ملاحظات فحص المستودع</label>
+          <input type="text" id="l-verify-rtn-notes" class="input-control" placeholder="أدخل أي ملاحظات خاصة بفرز الملابس المرتجعة..." style="margin-top:5px;">
+        </div>
+
+        <div style="max-height:220px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:8px; margin-top:5px;">
+          <table style="font-size:12px; width:100%;">
+            <thead>
+              <tr style="background:#f8fafc;">
+                <th style="padding:8px;">اسم الصنف</th>
+                <th style="padding:8px; width:80px;">المتوقع</th>
+                <th style="padding:8px; width:100px;">المستلم الفعلي</th>
+                <th style="padding:8px; width:120px;">سبب العجز / التلف</th>
+                <th style="padding:8px;">تفاصيل إضافية</th>
+              </tr>
+            </thead>
+            <tbody id="l-verify-rtn-items-body"></tbody>
+          </table>
+        </div>
+
+        <div style="display:flex; gap:10px; justify-content:flex-end; border-top:1px solid #f1f5f9; padding-top:10px;">
+          <button type="button" class="btn" onclick="submitReturnVerification('completed')" style="background:var(--success); padding:10px 20px;">
+            <i class="fa-solid fa-circle-check"></i> تأكيد واستلام كامل ومكتمل
+          </button>
+          <button type="button" class="btn" onclick="submitReturnVerification('disputed')" style="background:var(--warning); padding:10px 15px;">
+            <i class="fa-solid fa-triangle-exclamation"></i> إثبات نزيل وعجز كميات
+          </button>
+          <button type="button" class="btn btn-secondary" onclick="closeLaundryModal('laundry-verify-return-modal')" style="padding:10px 15px;">إلغاء</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== LAUNDRY TICKET MODAL ===== -->
+  <div id="laundry-ticket-modal" class="modal-overlay" style="display:none; z-index:1200;">
+    <div class="modal-card" style="max-width:650px;">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div style="background:linear-gradient(135deg, #f59e0b, #d97706); color:#fff; width:38px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px;">
+            <i class="fa-solid fa-receipt"></i>
+          </div>
+          <div>
+            <h3 style="font-size:16px; font-weight:800;">إنشاء تذكرة غسيل جديدة</h3>
+            <p style="font-size:11px; color:var(--text-muted); margin:0;">تسجيل خدمات الغسيل والكي والفوترة للنزلاء والموظفين</p>
+          </div>
+        </div>
+        <button class="modal-close-btn" onclick="closeLaundryModal('laundry-ticket-modal')">&times;</button>
+      </div>
+
+      <form id="l-new-ticket-form" onsubmit="submitLaundryTicket(event)" style="display:flex; flex-direction:column; gap:12px; margin-top:10px;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:12px; font-weight:700;">نوع التذكرة</label>
+            <select id="l-ticket-type" class="table-select" style="width:100%; padding:10px; margin-top:5px;" onchange="onTicketTypeChange()" required>
+              <option value="GUEST">نزيل فندق (GUEST)</option>
+              <option value="STAFF">موظف / زي موحد (STAFF)</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0;" id="l-ticket-guest-group">
+            <div style="display:grid; grid-template-columns:2fr 1fr; gap:10px;">
+              <div>
+                <label style="font-size:12px; font-weight:700;">اسم النزيل</label>
+                <input type="text" id="l-ticket-name" class="input-control" placeholder="اسم النزيل الثلاثي" style="margin-top:5px;">
+              </div>
+              <div>
+                <label style="font-size:12px; font-weight:700;">رقم الغرفة</label>
+                <input type="text" id="l-ticket-room" class="input-control" placeholder="104B" style="margin-top:5px;">
+              </div>
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom:0; display:none;" id="l-ticket-staff-group">
+            <label style="font-size:12px; font-weight:700;">رقم الموظف الداخلي (ID)</label>
+            <input type="number" id="l-ticket-emp-id" class="input-control" placeholder="رقم كود الموظف..." style="margin-top:5px;">
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:0;">
+          <label style="font-size:12px; font-weight:700;">ملاحظات التوصيل / متطلبات الكي</label>
+          <input type="text" id="l-ticket-notes" class="input-control" placeholder="أدخل أي ملاحظات خاصة بالكي أو النظافة..." style="margin-top:5px;">
+        </div>
+
+        <div style="border-top:1px solid #f1f5f9; padding-top:10px; margin-top:5px;">
+          <div style="font-size:12px; font-weight:700; margin-bottom:8px; color:var(--primary);"><i class="fa-solid fa-square-plus"></i> خدمات الغسيل المطلوبة</div>
+          <div style="display:grid; grid-template-columns: 2fr 80px 100px 50px; gap:10px; align-items:flex-end;">
+            <div class="form-group" style="margin-bottom:0;">
+              <select id="l-ticket-service" class="table-select" style="width:100%; padding:10px;">
+                <option value="SRV-DRYCLEAN-001" data-name="Dry Clean Suit">Dry Clean Suit (بدلة كاملة)</option>
+                <option value="SRV-WASH-002" data-name="Regular Shirt Wash">Regular Shirt Wash (غسيل قميص)</option>
+                <option value="SRV-IRON-003" data-name="Express Trouser Iron">Express Trouser Iron (كي بنطال مستعجل)</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <input type="number" id="l-ticket-qty" class="input-control" placeholder="العدد" style="padding:10px;" min="1">
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <input type="number" id="l-ticket-price" class="input-control" placeholder="سعر القطعة" style="padding:10px;" min="0">
+            </div>
+            <button type="button" class="btn" onclick="addServiceToTicket()" style="padding:11px;"><i class="fa-solid fa-plus"></i></button>
+          </div>
+        </div>
+
+        <!-- Selected services table -->
+        <div style="max-height:140px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:8px;">
+          <table style="font-size:12px; width:100%;">
+            <thead>
+              <tr style="background:#f8fafc;">
+                <th style="padding:8px;">نوع الخدمة</th>
+                <th style="padding:8px; width:80px;">العدد</th>
+                <th style="padding:8px; width:100px;">سعر القطعة</th>
+                <th style="padding:8px; width:100px;">الإجمالي</th>
+                <th style="padding:8px; width:50px;">حذف</th>
+              </tr>
+            </thead>
+            <tbody id="l-ticket-items-body"></tbody>
+          </table>
+        </div>
+
+        <div style="display:flex; gap:10px; justify-content:flex-end; border-top:1px solid #f1f5f9; padding-top:10px;">
+          <button type="submit" class="btn" style="background:var(--warning); padding:10px 24px; color:#fff;">تسجيل التذكرة والفوترة</button>
+          <button type="button" class="btn btn-secondary" onclick="closeLaundryModal('laundry-ticket-modal')" style="padding:10px 15px;">إلغاء</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== LAUNDRY NEW PROGRAM MODAL ===== -->
+  <div id="laundry-program-modal" class="modal-overlay" style="display:none; z-index:1200;">
+    <div class="modal-card" style="max-width:650px;">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div style="background:linear-gradient(135deg, #6366f1, #4f46e5); color:#fff; width:38px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px;">
+            <i class="fa-solid fa-list-check"></i>
+          </div>
+          <div>
+            <h3 id="program-modal-title" style="font-size:16px; font-weight:800;">إضافة برنامج تشغيل جديد</h3>
+            <p style="font-size:11px; color:var(--text-muted); margin:0;">تحديد دورة وبرنامج للغسالات</p>
+          </div>
+        </div>
+        <button class="modal-close-btn" onclick="closeLaundryModal('laundry-program-modal')">&times;</button>
+      </div>
+
+      <form id="l-program-form" onsubmit="submitLaundryProgram(event)" style="display:flex; flex-direction:column; gap:14px; margin-top:10px;">
+        <input type="hidden" id="l-program-id">
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:12px; font-weight:700;">الغسالة المرتبطة</label>
+            <select id="l-program-machine" class="table-select" style="width:100%; padding:10px; margin-top:5px;" required></select>
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:12px; font-weight:700;">اسم برنامج التشغيل</label>
+            <input type="text" id="l-program-name" class="input-control" placeholder="مثال: غسيل فوط قطنية بيضاء" style="margin-top:5px;" required>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:12px;">
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:12px; font-weight:700;">سعة التشغيل الموصى بها (كجم)</label>
+            <input type="number" id="l-program-recommended-cap" class="input-control" placeholder="مثال: 50" style="margin-top:5px;" min="0" step="any">
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:12px; font-weight:700;">السعة القصوى (كجم)</label>
+            <input type="number" id="l-program-maximum-cap" class="input-control" placeholder="مثال: 60" style="margin-top:5px;" min="0" step="any">
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:12px; font-weight:700;">الوصفة الكيميائية المرتبطة</label>
+            <select id="l-program-recipe-select" class="table-select" style="width:100%; padding:10px; margin-top:5px;"></select>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap:12px;">
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:12px; font-weight:700;">مدة الدورة (دقيقة)</label>
+            <input type="number" id="l-program-duration" class="input-control" placeholder="45" style="margin-top:5px;" min="0">
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:12px; font-weight:700;">درجة الحرارة (°م)</label>
+            <input type="number" id="l-program-temp" class="input-control" placeholder="75" style="margin-top:5px;" min="0" step="any">
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:12px; font-weight:700;">مستوى الماء (لتر)</label>
+            <input type="number" id="l-program-water" class="input-control" placeholder="120" style="margin-top:5px;" min="0" step="any">
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:12px; font-weight:700;">سرعة العصر (RPM)</label>
+            <input type="number" id="l-program-spin" class="input-control" placeholder="1000" style="margin-top:5px;" min="0">
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:0;">
+          <label style="font-size:12px; font-weight:700;">الوصف والشرح</label>
+          <input type="text" id="l-program-desc" class="input-control" placeholder="تفاصيل إضافية عن الدورة أو الاستخدامات..." style="margin-top:5px;">
+        </div>
+
+        <div style="display:flex; gap:10px; justify-content:flex-end; border-top:1px solid #f1f5f9; padding-top:10px;">
+          <button type="submit" class="btn" style="background:var(--primary); padding:10px 24px;">حفظ البرنامج</button>
+          <button type="button" class="btn btn-secondary" onclick="closeLaundryModal('laundry-program-modal')" style="padding:10px 15px;">إلغاء</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== LAUNDRY NEW RECIPE MODAL ===== -->
+  <div id="laundry-recipe-modal" class="modal-overlay" style="display:none; z-index:1200;">
+    <div class="modal-card" style="max-width:650px;">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div style="background:linear-gradient(135deg, #ef4444, #dc2626); color:#fff; width:38px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px;">
+            <i class="fa-solid fa-flask"></i>
+          </div>
+          <div>
+            <h3 style="font-size:16px; font-weight:800;">إضافة وصفة كيميائية جديدة</h3>
+            <p style="font-size:11px; color:var(--text-muted); margin:0;">ربط المعايير الكيميائية لجرعات المنظفات</p>
+          </div>
+        </div>
+        <button class="modal-close-btn" onclick="closeLaundryModal('laundry-recipe-modal')">&times;</button>
+      </div>
+
+      <form id="l-recipe-form" onsubmit="submitLaundryRecipe(event)" style="display:flex; flex-direction:column; gap:12px; margin-top:10px;">
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:12px; font-weight:700;">اسم الوصفة الكيميائية</label>
+            <input type="text" id="l-recipe-name" class="input-control" placeholder="مثال: معيار فوط بيضاء" style="margin-top:5px;" required>
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-size:12px; font-weight:700;">طريقة الاستهلاك</label>
+            <select id="l-recipe-mode" class="table-select" style="width:100%; padding:10px; margin-top:5px;" required>
+              <option value="STRICT">معيار ثابت صارم (STRICT)</option>
+              <option value="FLEXIBLE">معيار مرن متغير (FLEXIBLE)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:0;">
+          <label style="font-size:12px; font-weight:700;">الوصف والشرح</label>
+          <input type="text" id="l-recipe-desc" class="input-control" placeholder="شرح مبسط لاستخدامات هذه الوصفة..." style="margin-top:5px;">
+        </div>
+
+        <!-- Chemical Items Selection Wizard section -->
+        <div style="border-top:1px solid #f1f5f9; padding-top:10px; margin-top:5px; background:#f8fafc; padding:12px; border-radius:10px;">
+          <div style="font-size:12px; font-weight:800; margin-bottom:8px; color:var(--primary);"><i class="fa-solid fa-plus-circle"></i> تحديد جرعة المادة الكيميائية بالوصفة</div>
+          <div style="display:grid; grid-template-columns: 2fr 100px 100px 50px; gap:10px; align-items:flex-end;">
+            <div class="form-group" style="margin-bottom:0;">
+              <label style="font-size:10px;">المادة الكيميائية (المنظف) - اكتب للبحث</label>
+              <input type="text" id="l-recipe-chem-search" class="input-control" list="l-recipe-chem-datalist" placeholder="ابحث عن المادة الكيميائية..." style="padding:9px;" autocomplete="off">
+              <datalist id="l-recipe-chem-datalist"></datalist>
+              <input type="hidden" id="l-recipe-chem-select">
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label style="font-size:10px;">الكمية المستهدفة (جم/كجم)</label>
+              <input type="number" id="l-recipe-chem-qty" class="input-control" placeholder="مثال: 5.0" style="padding:9px;" step="any">
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label style="font-size:10px;">نمط الاستهلاك</label>
+              <select id="l-recipe-chem-mode" class="table-select" style="width:100%; padding:9px;">
+                <option value="chemical_per_kg">لكل 1 كجم غسيل</option>
+                <option value="fixed_consumption">كمية ثابتة للدورة</option>
+              </select>
+            </div>
+            <button type="button" class="btn" onclick="addRecipeChemicalLine()" style="padding:10px; background:var(--success); border:none;"><i class="fa-solid fa-plus"></i></button>
+          </div>
+        </div>
+
+        <!-- Selected chemicals table -->
+        <div style="max-height:120px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:8px;">
+          <table style="font-size:11px; width:100%; border-collapse:collapse;">
+            <thead>
+              <tr style="background:#f1f5f9;">
+                <th style="padding:6px; border-bottom:1px solid #cbd5e1;">المادة الكيميائية</th>
+                <th style="padding:6px; border-bottom:1px solid #cbd5e1; width:80px;">المعيار</th>
+                <th style="padding:6px; border-bottom:1px solid #cbd5e1; width:120px;">نمط الاستهلاك</th>
+                <th style="padding:6px; border-bottom:1px solid #cbd5e1; width:50px; text-align:center;">حذف</th>
+              </tr>
+            </thead>
+            <tbody id="l-recipe-lines-body">
+              <tr>
+                <td colspan="4" style="text-align:center; color:var(--text-muted); padding:10px;">لم يتم إضافة مواد كيميائية بعد</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div style="display:flex; gap:10px; justify-content:flex-end; border-top:1px solid #f1f5f9; padding-top:10px; margin-top:5px;">
+          <button type="submit" class="btn" style="background:var(--primary); padding:10px 24px;">حفظ وإضافة الوصفة</button>
+          <button type="button" class="btn btn-secondary" onclick="closeLaundryModal('laundry-recipe-modal')" style="padding:10px 15px;">إلغاء</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== LAUNDRY NEW MACHINE MODAL ===== -->
+  <div id="laundry-machine-modal" class="modal-overlay" style="display:none; z-index:1200;">
+    <div class="modal-card" style="max-width:450px;">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div style="background:linear-gradient(135deg, #10b981, #059669); color:#fff; width:38px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px;">
+            <i class="fa-solid fa-tv"></i>
+          </div>
+          <div>
+            <h3 style="font-size:16px; font-weight:800;">إضافة غسالة جديدة</h3>
+            <p style="font-size:11px; color:var(--text-muted); margin:0;">تسجيل أجهزة الغسيل التشغيلية للمركز</p>
+          </div>
+        </div>
+        <button class="modal-close-btn" onclick="closeLaundryModal('laundry-machine-modal')">&times;</button>
+      </div>
+
+      <form id="l-new-machine-form" onsubmit="submitLaundryMachine(event)" style="display:flex; flex-direction:column; gap:14px; margin-top:10px;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label style="font-size:12px; font-weight:700;">اسم أو رمز الغسالة</label>
+          <input type="text" id="l-mach-name" class="input-control" placeholder="مثال: غسالة أوتوماتيك 60 كجم B" style="margin-top:5px;" required>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label style="font-size:12px; font-weight:700;">السعة الكلية للغسالة (كجم)</label>
+          <input type="number" id="l-mach-capacity" class="input-control" placeholder="مثال: 60" style="margin-top:5px;" min="1" step="0.1" required>
+        </div>
+
+        <div style="display:flex; gap:10px; justify-content:flex-end; border-top:1px solid #f1f5f9; padding-top:10px;">
+          <button type="submit" class="btn" style="background:var(--success); padding:10px 24px;">حفظ وإضافة الغسالة</button>
+          <button type="button" class="btn btn-secondary" onclick="closeLaundryModal('laundry-machine-modal')" style="padding:10px 15px;">إلغاء</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/js/laundry.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>

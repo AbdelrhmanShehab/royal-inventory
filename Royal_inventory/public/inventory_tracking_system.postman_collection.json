@@ -1,0 +1,446 @@
+{
+	"info": {
+		"_postman_id": "7f8b9e6a-5c3b-4b2a-8d1e-9f0a7b6c5d4e",
+		"name": "Inventory Tracking System (نظام تتبع المخزون)",
+		"description": "API collection for managing custom warehouse hierarchies, pulling Comsys live stock, and posting internal transfers.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. المصادقة وتوقيع الدخول (Authentication)",
+			"item": [
+				{
+					"name": "تسجيل الدخول (Login)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData.success && jsonData.data && jsonData.data.accessToken) {",
+									"    pm.environment.set(\"token\", jsonData.data.accessToken);",
+									"    console.log(\"Token saved successfully:\", jsonData.data.accessToken);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"admin\",\n    \"password\": \"Admin@1234\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"auth",
+								"login"
+							]
+						},
+						"description": "تسجيل دخول مدير النظام. تقوم الدالة بحفظ توكن المصادقة تلقائياً في بيئة العمل لاستخدامه في الطلبات الأخرى."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "2. إدارة المزامنة وقراءة البيانات (Sync & Master Data)",
+			"item": [
+				{
+					"name": "تشغيل المزامنة للأرصدة من كومسيس (Trigger Sync)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"division\": \"fb\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/sync/run",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"sync",
+								"run"
+							]
+						},
+						"description": "تشغيل عملية سحب الأرصدة والبيانات الفعلية من كومسيس وتحديث المخزون التشغيلي المحلي."
+					},
+					"response": []
+				},
+				{
+					"name": "جلب مخازن كومسيس المتاحة (Get Active Warehouses)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/warehouses?division=fb",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"warehouses"
+							],
+							"query": [
+								{
+									"key": "division",
+									"value": "fb",
+									"description": "نوع النشاط (f&b or gs)"
+								}
+							]
+						},
+						"description": "جلب قائمة المستودعات الفعالة والمتاحة في كومسيس للربط بالشجرة."
+					},
+					"response": []
+				},
+				{
+					"name": "جلب الأصناف النشطة (Get Master Items)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/master-data/items?division=fb",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"master-data",
+								"items"
+							],
+							"query": [
+								{
+									"key": "division",
+									"value": "fb"
+								}
+							]
+						},
+						"description": "جلب قائمة الأصناف والمنتجات الفعالة المسحوبة من كومسيس لاستخدامها بالتحويلات."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "3. هيكلة وإدارة شجرة المستودعات (Warehouse Tree Hierarchy)",
+			"item": [
+				{
+					"name": "عرض قائمة المجموعات / الفنادق (Get Groups)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/hierarchy/groups",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"hierarchy",
+								"groups"
+							]
+						},
+						"description": "جلب مجموعات وهياكل الفنادق المختلفة المتاحة بالنظام."
+					},
+					"response": []
+				},
+				{
+					"name": "إنشاء مجموعة / فندق جديد (Create Group)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"groupNameAr\": \"فندق جاردن كافيه والساحل\",\n    \"groupCode\": \"garden_coast\",\n    \"isActive\": true\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/hierarchy/groups",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"hierarchy",
+								"groups"
+							]
+						},
+						"description": "إضافة فندق أو قرية سياحية جديدة للهيكل التنظيمي."
+					},
+					"response": []
+				},
+				{
+					"name": "عرض شجرة الهيكل بالكامل مع الأرصدة (Get Tree)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/hierarchy/tree?groupId=1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"hierarchy",
+								"tree"
+							],
+							"query": [
+								{
+									"key": "groupId",
+									"value": "1",
+									"description": "معرف الفندق/المجموعة"
+								}
+							]
+						},
+						"description": "جلب الهيكل الشجري المتكامل للفندق المحدد متضمناً الأرصدة المجمعة لكل عقدة افتراضية أو فعلية."
+					},
+					"response": []
+				},
+				{
+					"name": "إضافة مجلد افتراضي للشجرة (Create Parent Node)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"groupId\": 1,\n    \"parentNodeId\": 1,\n    \"nodeNameAr\": \"مطابخ قرية جاردن الغربية\",\n    \"nodeType\": \"parent\",\n    \"comsysStoreCode\": null,\n    \"managerName\": \"مشرف المجلد\",\n    \"isActive\": true\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/hierarchy/nodes",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"hierarchy",
+								"nodes"
+							]
+						},
+						"description": "إضافة مجلد افتراضي (Parent) لتقسيم وتوزيع المخازن تحته بشكل هرمي."
+					},
+					"response": []
+				},
+				{
+					"name": "ربط مخزن كومسيس الفعلي (Link Store Node)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"groupId\": 1,\n    \"parentNodeId\": 1,\n    \"nodeNameAr\": \"مطبخ بار الشاطئ الفعلي\",\n    \"nodeType\": \"child\",\n    \"comsysStoreCode\": \"108\",\n    \"managerName\": \"أمين عهدة البار\",\n    \"isActive\": true,\n    \"division\": \"fb\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/hierarchy/nodes",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"hierarchy",
+								"nodes"
+							]
+						},
+						"description": "ربط مستودع حقيقي من كومسيس بعقدة نهائية (Child) تابعة لمجلد افتراضي."
+					},
+					"response": []
+				},
+				{
+					"name": "عرض أرصدة عقدة معينة تفصيلياً (Get Node Stock & Items)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/hierarchy/nodes/2/stock",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"hierarchy",
+								"nodes",
+								"2",
+								"stock"
+							]
+						},
+						"description": "جلب تقرير الأرصدة وعناصر المخزون للعقدة المحددة. في حال كانت مجلداً (Parent)، سيتم جمع الأرصدة من جميع الفروع والأبناء بشكل تراجعي (Recursive aggregation)."
+					},
+					"response": []
+				},
+				{
+					"name": "حذف أو فك ربط عقدة (Delete Node)",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/hierarchy/nodes/8",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"hierarchy",
+								"nodes",
+								"8"
+							]
+						},
+						"description": "حذف مجلد أو فك ربط مستودع كومسيس من الشجرة التشغيلية."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "4. حركات التحويل الداخلي للمخزون (Internal Transfers)",
+			"item": [
+				{
+					"name": "جلب قائمة الحركات والعمليات (Get All Transfers)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/transactions/transfers",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"transactions",
+								"transfers"
+							]
+						},
+						"description": "جلب سجل التحويلات الداخلية بالكامل مع تفاصيل الأطراف وحالة التأكيد والمستخدمين."
+					},
+					"response": []
+				},
+				{
+					"name": "إنشاء مسودة طلب تحويل جديد (Create Transfer Draft)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"fromNodeId\": 2,\n    \"toNodeId\": 3,\n    \"notes\": \"تحويل مستعجل لسد نقص المطبخ الشرقي\",\n    \"reason\": \"تحويل داخلي تشغيلي\",\n    \"lines\": [\n        {\n            \"itemCode\": \"10101\",\n            \"quantity\": 2.0000,\n            \"unitCode\": \"01\",\n            \"unitCost\": 150.0000\n        }\n    ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/transactions/transfers",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"transactions",
+								"transfers"
+							]
+						},
+						"description": "حفظ طلب التحويل كمسودة (Draft). لا تؤثر هذه المعاملة على الأرصدة الفعلية إلا بعد الترحيل والتأكيد."
+					},
+					"response": []
+				},
+				{
+					"name": "جلب تفاصيل مستند تحويل محدد (Get Transfer Details)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/transactions/transfers/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"transactions",
+								"transfers",
+								"1"
+							]
+						},
+						"description": "عرض تفاصيل قيد التحويل والأصناف المحولة والكميات والأطراف والتواريخ والمنفذ والمؤكد."
+					},
+					"response": []
+				},
+				{
+					"name": "ترحيل وتأكيد عملية التحويل (Confirm Transfer)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/transactions/transfers/1/confirm",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"transactions",
+								"transfers",
+								"1",
+								"confirm"
+							]
+						},
+						"description": "تأكيد مستند التحويل وترحيل الأرصدة؛ حيث يقوم النظام بخصم الكميات من مستودع المصدر وإضافتها لمستودع الوجهة داخل الحسابات التشغيلية والتأكد من وفرة الرصيد قبل الترحيل."
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{token}}",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:3000/api/v1",
+			"type": "string"
+		}
+	]
+}

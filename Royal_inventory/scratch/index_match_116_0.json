@@ -1,0 +1,12 @@
+{
+  "name": "grep_search",
+  "args": {
+    "CaseInsensitive": true,
+    "IsRegex": false,
+    "MatchPerLine": true,
+    "Query": "خارج",
+    "SearchPath": "e:\\inventory_tracking_system\\public\\index.html",
+    "toolAction": "Searching for خارج in index.html",
+    "toolSummary": "Searching for 'خارج' in index.html."
+  }
+}

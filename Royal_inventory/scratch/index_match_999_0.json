@@ -1,0 +1,10 @@
+{
+  "name": "run_command",
+  "args": {
+    "CommandLine": "Select-String -Path \"public\\index.html\" -Pattern \"class=\\\"explorer-tab\"",
+    "Cwd": "e:\\inventory_tracking_system",
+    "WaitMsBeforeAsync": 3000,
+    "toolAction": "Searching explorer tabs in html",
+    "toolSummary": "Searching index.html for explorer tabs to see what tabs are shown when a warehouse node is selected."
+  }
+}

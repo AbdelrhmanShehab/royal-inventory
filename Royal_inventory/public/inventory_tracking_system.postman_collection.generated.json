@@ -1,0 +1,852 @@
+{
+  "info": {
+    "_postman_id": "auto-generated-collection",
+    "name": "Inventory Tracking System (Auto-generated)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "/api",
+      "item": [
+        {
+          "name": "POST /api/v1/auth/login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/auth/refresh",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/refresh",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "refresh"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/auth/logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/logout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "logout"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/auth/change-password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/change-password",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "change-password"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/auth/me",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "me"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/users/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/users/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/users/",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/users/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/users/:id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/users/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "PUT /api/v1/users/:id",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/users/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/v1/users/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/users/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/sync/health",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/sync/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sync",
+                "health"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/sync/explore/tables",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/sync/explore/tables",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sync",
+                "explore",
+                "tables"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/sync/explore/table/:tableName",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/sync/explore/table/:tableName",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sync",
+                "explore",
+                "table",
+                ":tableName"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/sync/explore/preview/:tableName",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/sync/explore/preview/:tableName",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sync",
+                "explore",
+                "preview",
+                ":tableName"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/warehouses/",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/warehouses/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "warehouses"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/master-data/categories",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/master-data/categories",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "master-data",
+                "categories"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/master-data/items",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/master-data/items",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "master-data",
+                "items"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/hierarchy/tree",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hierarchy/tree",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hierarchy",
+                "tree"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/hierarchy/stock",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hierarchy/stock",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hierarchy",
+                "stock"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/hierarchy/groups",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hierarchy/groups",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hierarchy",
+                "groups"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/hierarchy/groups",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hierarchy/groups",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hierarchy",
+                "groups"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/hierarchy/groups/:id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hierarchy/groups/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hierarchy",
+                "groups",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "PUT /api/v1/hierarchy/groups/:id",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hierarchy/groups/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hierarchy",
+                "groups",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/v1/hierarchy/groups/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hierarchy/groups/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hierarchy",
+                "groups",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/hierarchy/nodes",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hierarchy/nodes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hierarchy",
+                "nodes"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/hierarchy/nodes/:id/stock",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hierarchy/nodes/:id/stock",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hierarchy",
+                "nodes",
+                ":id",
+                "stock"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/hierarchy/nodes/:id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hierarchy/nodes/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hierarchy",
+                "nodes",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "PUT /api/v1/hierarchy/nodes/:id",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hierarchy/nodes/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hierarchy",
+                "nodes",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/v1/hierarchy/nodes/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hierarchy/nodes/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "hierarchy",
+                "nodes",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/transactions/transfers/",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/transactions/transfers/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "transactions",
+                "transfers"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/transactions/transfers/",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/transactions/transfers/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "transactions",
+                "transfers"
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/v1/transactions/transfers/:id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/transactions/transfers/:id",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "transactions",
+                "transfers",
+                ":id"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/v1/transactions/transfers/:id/confirm",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/transactions/transfers/:id/confirm",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "transactions",
+                "transfers",
+                ":id",
+                "confirm"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "/health",
+      "item": [
+        {
+          "name": "GET /health",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    }
+  ]
+}

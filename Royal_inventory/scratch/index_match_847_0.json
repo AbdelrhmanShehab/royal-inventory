@@ -1,0 +1,10 @@
+{
+  "name": "run_command",
+  "args": {
+    "CommandLine": "Select-String -Path \"public\\index.html\" -Pattern \"renderOperationalTab\"",
+    "Cwd": "e:\\inventory_tracking_system",
+    "WaitMsBeforeAsync": 3000,
+    "toolAction": "Checking index.html for calls",
+    "toolSummary": "Checking if index.html calls renderOperationalTab before app.js is fully loaded."
+  }
+}

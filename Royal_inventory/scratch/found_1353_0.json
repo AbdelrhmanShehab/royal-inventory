@@ -1,0 +1,15 @@
+{
+  "name": "replace_file_content",
+  "args": {
+    "AllowMultiple": false,
+    "Description": "Search log lines for explorer-operational-tab-content.",
+    "EndLine": 48,
+    "Instruction": "Modify find_deleted_html.js to search for explorer-operational-tab-content in any part of the json line and write the full match to a file.",
+    "ReplacementContent": "  for await (const line of rl) {\n    if (line.includes('explorer-operational-tab-content')) {\n      console.log('Found line matching query!');\n      try {\n        const obj = JSON.parse(line);\n        console.log('Step Index:', obj.step_index, 'Type:', obj.type);\n        if (obj.tool_calls) {\n          obj.tool_calls.forEach((tc, idx) => {\n            console.log(`Tool call ${idx}:`, tc.name);\n            fs.writeFileSync(`scratch/found_${obj.step_index}_${idx}.json`, JSON.stringify(tc, null, 2), 'utf8');\n            console.log(`Saved to scratch/found_${obj.step_index}_${idx}.json`);\n          });\n        }\n      } catch (err) {\n        // write raw line\n        fs.writeFileSync('scratch/raw_match.json', line, 'utf8');\n        console.log('Saved raw match to scratch/raw_match.json due to parse error:', err.message);\n      }\n    }\n  }",
+    "StartLine": 21,
+    "TargetContent": "  for await (const line of rl) {\n    try {\n      const obj = JSON.parse(line);\n      if ([1144, 1154, 1345].includes(obj.step_index)) {\n        console.log('\\n--- FOUND TOOL CALL FOR INDEX:', obj.step_index, '---');\n        if (obj.tool_calls) {\n          obj.tool_calls.forEach(tc => {\n            console.log('Tool Name:', tc.name);\n            if (tc.arguments) {\n              console.log('TargetFile:', tc.arguments.TargetFile);\n              if (tc.arguments.ReplacementContent) {\n                console.log('ReplacementContent Length:', tc.arguments.ReplacementContent.length);\n                fs.writeFileSync(`scratch/extracted_html_${obj.step_index}.txt`, tc.arguments.ReplacementContent, 'utf8');\n                console.log(`Saved to scratch/extracted_html_${obj.step_index}.txt`);\n              }\n              if (tc.arguments.CodeContent) {\n                console.log('CodeContent Length:', tc.arguments.CodeContent.length);\n                fs.writeFileSync(`scratch/extracted_html_${obj.step_index}.txt`, tc.arguments.CodeContent, 'utf8');\n                console.log(`Saved to scratch/extracted_html_${obj.step_index}.txt`);\n              }\n            }\n          });\n        }\n      }\n    } catch (err) {\n      // ignore\n    }\n  }",
+    "TargetFile": "e:\\inventory_tracking_system\\scratch\\find_deleted_html.js",
+    "toolAction": "Updating search script to write raw logs",
+    "toolSummary": "Updating find_deleted_html.js to locate and export the exact HTML block."
+  }
+}

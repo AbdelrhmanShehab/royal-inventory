@@ -1,0 +1,10 @@
+{
+  "name": "run_command",
+  "args": {
+    "CommandLine": "Select-String -Path \"e:\\inventory_tracking_system\\public\\index.html\" -Pattern \"op-sum-official|op-sum-allocated|op-sum-consumed|op-sum-available|op-sum-status\"",
+    "Cwd": "e:\\inventory_tracking_system",
+    "WaitMsBeforeAsync": 3000,
+    "toolAction": "Searching for summary card IDs in HTML",
+    "toolSummary": "Verifying existence of op-sum-* elements in index.html."
+  }
+}

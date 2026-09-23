@@ -1,0 +1,16 @@
+node_modules/
+.env
+logs/
+*.log
+dist/
+coverage/
+.DS_Store
+Thumbs.db
+*.local
+build/
+.dart_tool/
+ios/Pods/
+android/.gradle/
+*.lock
+*.png
+*.jpg

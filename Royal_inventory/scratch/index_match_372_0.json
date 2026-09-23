@@ -1,0 +1,10 @@
+{
+  "name": "run_command",
+  "args": {
+    "CommandLine": "Select-String -Path \"e:\\inventory_tracking_system\\public\\index.html\" -Pattern \"app\\.js\"",
+    "Cwd": "e:\\inventory_tracking_system",
+    "WaitMsBeforeAsync": 3000,
+    "toolAction": "Finding app.js script tag in index.html",
+    "toolSummary": "Searching for app.js script tag in index.html."
+  }
+}

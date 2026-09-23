@@ -1,0 +1,8 @@
+{
+  "name": "list_dir",
+  "args": {
+    "DirectoryPath": "e:\\inventory_tracking_system\\public",
+    "toolAction": "Listing public directory",
+    "toolSummary": "Listing files in the public directory to look for backups."
+  }
+}

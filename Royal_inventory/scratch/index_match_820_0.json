@@ -1,0 +1,10 @@
+{
+  "name": "run_command",
+  "args": {
+    "CommandLine": "Select-String -Path \"public\\index.html\" -Pattern \"table-search\"",
+    "Cwd": "e:\\inventory_tracking_system",
+    "WaitMsBeforeAsync": 3000,
+    "toolAction": "Checking index.html for ID",
+    "toolSummary": "Checking if table-search exists in index.html."
+  }
+}

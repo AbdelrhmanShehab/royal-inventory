@@ -1,0 +1,12 @@
+{
+  "name": "grep_search",
+  "args": {
+    "CaseInsensitive": false,
+    "IsRegex": false,
+    "MatchPerLine": true,
+    "Query": "addEventListener",
+    "SearchPath": "e:\\inventory_tracking_system\\public\\js\\laundry.js",
+    "toolAction": "Searching for event listeners in laundry.js",
+    "toolSummary": "Searching laundry.js for addEventListener to check DOM event bindings."
+  }
+}

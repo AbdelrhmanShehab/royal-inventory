@@ -1,0 +1,10 @@
+{
+  "name": "view_file",
+  "args": {
+    "AbsolutePath": "e:\\inventory_tracking_system\\public\\index.html",
+    "EndLine": 2537,
+    "StartLine": 2500,
+    "toolAction": "Viewing end of index.html",
+    "toolSummary": "Viewing public/index.html from line 2500 to the end."
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "grep_search",
+  "args": {
+    "CaseInsensitive": false,
+    "IsRegex": false,
+    "MatchPerLine": true,
+    "Query": "<script",
+    "SearchPath": "e:\\inventory_tracking_system\\public\\index.html",
+    "toolAction": "Searching for script tags in index.html",
+    "toolSummary": "Searching public/index.html to locate script tags."
+  }
+}

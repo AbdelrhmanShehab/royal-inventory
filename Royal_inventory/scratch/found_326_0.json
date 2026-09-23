@@ -1,0 +1,10 @@
+{
+  "name": "run_command",
+  "args": {
+    "CommandLine": "Select-String -Path \"e:\\inventory_tracking_system\\public\\index.html\" -Pattern \"explorer-operational-tab-content\" | Select-Object -First 5",
+    "Cwd": "e:\\inventory_tracking_system",
+    "WaitMsBeforeAsync": 3000,
+    "toolAction": "Finding the operational tab content container",
+    "toolSummary": "Searching for explorer-operational-tab-content in index.html."
+  }
+}

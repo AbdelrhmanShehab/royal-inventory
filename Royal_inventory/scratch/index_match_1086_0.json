@@ -1,0 +1,10 @@
+{
+  "name": "view_file",
+  "args": {
+    "AbsolutePath": "e:\\inventory_tracking_system\\public\\index.html",
+    "EndLine": 680,
+    "StartLine": 630,
+    "toolAction": "Viewing index.html tab contents",
+    "toolSummary": "Viewing public/index.html around line 653 to see the tabs list and tab contents."
+  }
+}

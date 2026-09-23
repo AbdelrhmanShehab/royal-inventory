@@ -1,0 +1,15 @@
+{
+  "name": "replace_file_content",
+  "args": {
+    "AllowMultiple": false,
+    "Description": "Add Laundry status tab button to explorer tabs bar.",
+    "EndLine": 384,
+    "Instruction": "Insert the laundry-node tab button inside index.html.",
+    "ReplacementContent": "            <button class=\"tab-btn\" id=\"tab-btn-operational\" onclick=\"switchExplorerTab('operational')\" style=\"display:none;\">التوزيع الداخلي (المواقع التشغيلية)</button>\n            <button class=\"tab-btn\" id=\"tab-btn-laundry-node\" onclick=\"switchExplorerTab('laundry-node')\" style=\"display:none;\">حالة المغسلة (علاقة المخزن)</button>\n          </div>",
+    "StartLine": 383,
+    "TargetContent": "            <button class=\"tab-btn\" id=\"tab-btn-operational\" onclick=\"switchExplorerTab('operational')\" style=\"display:none;\">التوزيع الداخلي (المواقع التشغيلية)</button>\n          </div>",
+    "TargetFile": "e:\\inventory_tracking_system\\public\\index.html",
+    "toolAction": "Adding tab button to index.html",
+    "toolSummary": "Adding tab-btn-laundry-node button to index.html."
+  }
+}

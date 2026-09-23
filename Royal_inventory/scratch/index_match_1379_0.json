@@ -1,0 +1,15 @@
+{
+  "name": "replace_file_content",
+  "args": {
+    "AllowMultiple": false,
+    "Description": "Make log search for index.html case-insensitive and slash-agnostic.",
+    "EndLine": 25,
+    "Instruction": "Modify find_index_changes.js to search for index.html and replace_file_content.",
+    "ReplacementContent": "  for await (const line of rl) {\n    if (line.toLowerCase().includes('index.html') && line.includes('replace_file_content')) {\n      try {\n        const obj = JSON.parse(line);\n        if (obj.tool_calls) {",
+    "StartLine": 21,
+    "TargetContent": "  for await (const line of rl) {\n    if (line.includes('public/index.html') && line.includes('replace_file_content')) {\n      try {\n        const obj = JSON.parse(line);\n        if (obj.tool_calls) {",
+    "TargetFile": "e:\\inventory_tracking_system\\scratch\\find_index_changes.js",
+    "toolAction": "Updating path matching in search script",
+    "toolSummary": "Updating find_index_changes.js to be case/slash insensitive."
+  }
+}

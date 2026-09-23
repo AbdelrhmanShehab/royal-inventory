@@ -1,0 +1,12 @@
+{
+  "name": "grep_search",
+  "args": {
+    "CaseInsensitive": false,
+    "IsRegex": false,
+    "MatchPerLine": true,
+    "Query": "hm-form-warehouse",
+    "SearchPath": "e:\\inventory_tracking_system\\public",
+    "toolAction": "Searching for warehouse form",
+    "toolSummary": "Searching public/index.html for hm-form-warehouse."
+  }
+}

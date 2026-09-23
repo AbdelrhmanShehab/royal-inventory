@@ -1,0 +1,10 @@
+{
+  "name": "view_file",
+  "args": {
+    "AbsolutePath": "e:\\inventory_tracking_system\\public\\js\\app.js",
+    "EndLine": 355,
+    "StartLine": 322,
+    "toolAction": "Viewing renderOperationalSubWarehouseView timing issue",
+    "toolSummary": "Viewing the critical sequence of calls in renderOperationalSubWarehouseView."
+  }
+}

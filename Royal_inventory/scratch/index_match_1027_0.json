@@ -1,0 +1,10 @@
+{
+  "name": "view_file",
+  "args": {
+    "AbsolutePath": "e:\\inventory_tracking_system\\public\\index.html",
+    "EndLine": 2485,
+    "StartLine": 2445,
+    "toolAction": "Viewing index.html hm-form-warehouse",
+    "toolSummary": "Viewing index.html lines 2445 to 2485 to see the structure of the warehouse creation form."
+  }
+}

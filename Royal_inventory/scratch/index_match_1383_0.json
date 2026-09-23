@@ -1,0 +1,15 @@
+{
+  "name": "replace_file_content",
+  "args": {
+    "AllowMultiple": false,
+    "Description": "Search logs for index.html.",
+    "EndLine": 36,
+    "Instruction": "Modify find_index_changes.js to search for index.html in any tool call and log the step details.",
+    "ReplacementContent": "  for await (const line of rl) {\n    if (line.toLowerCase().includes('index.html')) {\n      try {\n        const obj = JSON.parse(line);\n        console.log(`Match at Step: ${obj.step_index} | Type: ${obj.type}`);\n        if (obj.tool_calls) {\n          obj.tool_calls.forEach((tc, idx) => {\n            console.log(`  Tool: ${tc.name} | Target: ${tc.arguments?.TargetFile || tc.arguments?.AbsolutePath}`);\n            fs.writeFileSync(`scratch/index_match_${obj.step_index}_${idx}.json`, JSON.stringify(tc, null, 2), 'utf8');\n          });\n        }\n      } catch (err) {\n        // ignore\n      }\n    }\n  }",
+    "StartLine": 21,
+    "TargetContent": "  for await (const line of rl) {\n    if (line.toLowerCase().includes('index.html') && line.includes('replace_file_content')) {\n      try {\n        const obj = JSON.parse(line);\n        if (obj.tool_calls) {\n          obj.tool_calls.forEach((tc, idx) => {\n            if (tc.name === 'replace_file_content' && tc.arguments && tc.arguments.TargetFile.includes('index.html')) {\n              console.log(`\\n--- STEP ${obj.step_index} (${tc.name}) ---`);\n              console.log('Instruction:', tc.arguments.Instruction);\n              console.log('TargetContent Length:', tc.arguments.TargetContent?.length);\n              console.log('ReplacementContent Length:', tc.arguments.ReplacementContent?.length);\n              fs.writeFileSync(`scratch/index_patch_${obj.step_index}_${idx}.txt`, tc.arguments.ReplacementContent || '', 'utf8');\n              console.log(`Saved ReplacementContent to scratch/index_patch_${obj.step_index}_${idx}.txt`);\n            }\n          });\n        }\n      } catch (err) {\n        // ignore\n      }\n    }\n  }",
+    "TargetFile": "e:\\inventory_tracking_system\\scratch\\find_index_changes.js",
+    "toolAction": "Broadening index search in logs",
+    "toolSummary": "Updating find_index_changes.js to locate any tool calls referencing index.html."
+  }
+}

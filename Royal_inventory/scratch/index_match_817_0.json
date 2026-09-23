@@ -1,0 +1,10 @@
+{
+  "name": "run_command",
+  "args": {
+    "CommandLine": "Select-String -Path \"public\\index.html\" -Pattern \"btn-sync-all\"",
+    "Cwd": "e:\\inventory_tracking_system",
+    "WaitMsBeforeAsync": 3000,
+    "toolAction": "Checking index.html for ID",
+    "toolSummary": "Checking if btn-sync-all exists in index.html to see if it causes a crash."
+  }
+}

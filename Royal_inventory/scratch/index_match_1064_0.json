@@ -1,0 +1,15 @@
+{
+  "name": "replace_file_content",
+  "args": {
+    "AllowMultiple": false,
+    "Description": "Add checkbox to enable laundry access when linking a warehouse in the hierarchy management panel.",
+    "EndLine": 2467,
+    "Instruction": "Insert a laundry access checkbox in index.html inside the hm-form-warehouse.",
+    "ReplacementContent": "          <div class=\"form-group\" style=\"margin-bottom:0;\">\n            <label style=\"font-size:12px; font-weight:700;\">اسم العرض داخل النظام</label>\n            <input type=\"text\" id=\"hm-warehouse-name\" class=\"input-control\" placeholder=\"مثال: المطبخ الرئيسي بالاس\" style=\"margin-top:5px;\" required>\n          </div>\n          <div class=\"form-group\" style=\"margin-bottom:10px; display:flex; align-items:center; gap:8px; margin-top:5px;\">\n            <input type=\"checkbox\" id=\"hm-warehouse-laundry\" style=\"width:16px; height:16px; cursor:pointer;\">\n            <label for=\"hm-warehouse-laundry\" style=\"font-size:12px; font-weight:700; cursor:pointer; margin:0; user-select:none; color:var(--text-main);\">تمكين صلاحية التعامل مع المغسلة (Laundry Access)</label>\n          </div>\n          <button type=\"submit\" class=\"btn\" style=\"background:#10b981; border-color:#10b981; color:#fff; padding:10px; font-size:13px; font-weight:700; width:100%; margin-top:5px;\"><i class=\"fa-solid fa-link\"></i> ربط وتفعيل المستودع</button>\n        </form>",
+    "StartLine": 2462,
+    "TargetContent": "          <div class=\"form-group\" style=\"margin-bottom:0;\">\n            <label style=\"font-size:12px; font-weight:700;\">اسم العرض داخل النظام</label>\n            <input type=\"text\" id=\"hm-warehouse-name\" class=\"input-control\" placeholder=\"مثال: المطبخ الرئيسي بالاس\" style=\"margin-top:5px;\" required>\n          </div>\n          <button type=\"submit\" class=\"btn\" style=\"background:#10b981; border-color:#10b981; color:#fff; padding:10px; font-size:13px; font-weight:700; width:100%; margin-top:5px;\"><i class=\"fa-solid fa-link\"></i> ربط وتفعيل المستودع</button>\n        </form>",
+    "TargetFile": "e:\\inventory_tracking_system\\public\\index.html",
+    "toolAction": "Adding laundry checkbox to index.html",
+    "toolSummary": "Adding the hasLaundryAccess checkbox to the warehouse linking form in index.html."
+  }
+}

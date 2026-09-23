@@ -26,4 +26,5 @@ dist-ssr
 
 # Deployment builds
 deploy/
+deploy.zip
 tools/bin/

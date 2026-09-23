@@ -1,0 +1,15 @@
+{
+  "name": "replace_file_content",
+  "args": {
+    "AllowMultiple": false,
+    "Description": "Added cache-busting query strings to force the browser to reload the latest version of app.js and laundry.js instead of serving stale cached versions. The timestamp ensures a fresh load every time the server restarts.",
+    "EndLine": 2529,
+    "Instruction": "Add cache-busting timestamp to the script src tags.",
+    "ReplacementContent": "  <script src=\"/js/laundry.js?v=20260706b\"></script>\n  <script src=\"/js/app.js?v=20260706b\"></script>",
+    "StartLine": 2528,
+    "TargetContent": "  <script src=\"/js/laundry.js\"></script>\n  <script src=\"/js/app.js\"></script>",
+    "TargetFile": "e:\\inventory_tracking_system\\public\\index.html",
+    "toolAction": "Adding cache-busting to script tags",
+    "toolSummary": "Adding cache-busting query string to script tags in index.html."
+  }
+}

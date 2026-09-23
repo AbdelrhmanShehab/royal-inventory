@@ -1,0 +1,10 @@
+{
+  "name": "view_file",
+  "args": {
+    "AbsolutePath": "e:\\inventory_tracking_system\\public\\js\\app.js",
+    "EndLine": 30,
+    "StartLine": 1,
+    "toolAction": "Viewing top of app.js",
+    "toolSummary": "Viewing the top of app.js to check if functions are called before line 27."
+  }
+}

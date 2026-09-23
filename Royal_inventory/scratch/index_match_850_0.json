@@ -1,0 +1,10 @@
+{
+  "name": "run_command",
+  "args": {
+    "CommandLine": "Select-String -Path \"public\\index.html\" -Pattern \"<script\" -Context 0,2",
+    "Cwd": "e:\\inventory_tracking_system",
+    "WaitMsBeforeAsync": 3000,
+    "toolAction": "Checking inline scripts",
+    "toolSummary": "Checking index.html for any inline scripts that might be calling functions before app.js is loaded."
+  }
+}

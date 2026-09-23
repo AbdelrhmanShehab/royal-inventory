@@ -1,0 +1,10 @@
+{
+  "name": "view_file",
+  "args": {
+    "AbsolutePath": "e:\\inventory_tracking_system\\public\\index.html",
+    "EndLine": 730,
+    "StartLine": 660,
+    "toolAction": "Viewing the operational tab HTML structure",
+    "toolSummary": "Viewing the operational tab container structure in index.html."
+  }
+}

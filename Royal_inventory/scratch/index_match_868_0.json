@@ -1,0 +1,10 @@
+{
+  "name": "run_command",
+  "args": {
+    "CommandLine": "node -e \"\nconst fs = require('fs');\nconst appJs = fs.readFileSync('public/js/app.js', 'utf8');\nconst indexHtml = fs.readFileSync('public/index.html', 'utf8');\n\nconst regex = /document\\.getElementById\\(['\\\"]([^'\\\"]+)['\\\"]\\)\\.addEventListener/g;\nlet match;\nwhile ((match = regex.exec(appJs)) !== null) {\n  const id = match[1];\n  if (!indexHtml.includes('id=\\\"' + id + '\\\"') && !indexHtml.includes('id=\\'' + id + '\\'')) {\n    console.log('MISSING ID IN HTML:', id);\n  }\n}\n\"",
+    "Cwd": "e:\\inventory_tracking_system",
+    "WaitMsBeforeAsync": 3000,
+    "toolAction": "Finding missing IDs",
+    "toolSummary": "Extracting all getElementById calls from app.js that attach event listeners at the top level and checking if those IDs exist in index.html to find the cause of the script crash."
+  }
+}

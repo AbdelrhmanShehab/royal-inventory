@@ -1,0 +1,12 @@
+{
+  "name": "grep_search",
+  "args": {
+    "CaseInsensitive": false,
+    "IsRegex": false,
+    "MatchPerLine": true,
+    "Query": "explorer-operational-tab-content",
+    "SearchPath": "e:\\inventory_tracking_system\\public",
+    "toolAction": "Searching for operational tab content",
+    "toolSummary": "Searching public/index.html for explorer-operational-tab-content."
+  }
+}

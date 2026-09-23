@@ -1,0 +1,12 @@
+{
+  "name": "grep_search",
+  "args": {
+    "CaseInsensitive": true,
+    "IsRegex": false,
+    "MatchPerLine": true,
+    "Query": "menu-laundry",
+    "SearchPath": "e:\\inventory_tracking_system\\public",
+    "toolAction": "Searching for laundry sidebar item",
+    "toolSummary": "Searching for menu-laundry in index.html to see the sidebar menu structure."
+  }
+}

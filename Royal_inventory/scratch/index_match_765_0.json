@@ -1,0 +1,10 @@
+{
+  "name": "run_command",
+  "args": {
+    "CommandLine": "npm run format",
+    "Cwd": "e:\\inventory_tracking_system",
+    "WaitMsBeforeAsync": 3000,
+    "toolAction": "Formatting Code",
+    "toolSummary": "Running formatter to ensure code formatting is clean."
+  }
+}

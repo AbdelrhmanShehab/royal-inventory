@@ -1,0 +1,12 @@
+{
+  "name": "grep_search",
+  "args": {
+    "CaseInsensitive": false,
+    "IsRegex": false,
+    "MatchPerLine": true,
+    "Query": "app.js",
+    "SearchPath": "e:\\inventory_tracking_system\\public",
+    "toolAction": "Searching for app.js script loading",
+    "toolSummary": "Searching public/index.html to check the loading order of script files."
+  }
+}

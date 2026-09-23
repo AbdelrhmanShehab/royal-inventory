@@ -1,0 +1,10 @@
+{
+  "name": "run_command",
+  "args": {
+    "CommandLine": "Select-String -Path \"public\\js\\app.js\" -Pattern \"^\\s*await \"",
+    "Cwd": "e:\\inventory_tracking_system",
+    "WaitMsBeforeAsync": 3000,
+    "toolAction": "Searching for top-level await",
+    "toolSummary": "Searching app.js for top-level await statements that might suspend script execution."
+  }
+}

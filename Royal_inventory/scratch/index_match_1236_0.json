@@ -1,0 +1,10 @@
+{
+  "name": "view_file",
+  "args": {
+    "AbsolutePath": "e:\\inventory_tracking_system\\public\\index.html",
+    "EndLine": 390,
+    "StartLine": 375,
+    "toolAction": "Viewing index.html tab buttons",
+    "toolSummary": "Viewing index.html lines 375 to 390."
+  }
+}

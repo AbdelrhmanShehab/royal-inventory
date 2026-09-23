@@ -1,0 +1,12 @@
+{
+  "name": "grep_search",
+  "args": {
+    "CaseInsensitive": true,
+    "IsRegex": false,
+    "MatchPerLine": true,
+    "Query": "نوع المعاملة التشغيلية",
+    "SearchPath": "e:\\inventory_tracking_system",
+    "toolAction": "Searching for transaction type label in index.html",
+    "toolSummary": "Searching for transaction type label in front-end."
+  }
+}

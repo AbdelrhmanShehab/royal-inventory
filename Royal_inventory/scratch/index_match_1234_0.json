@@ -1,0 +1,10 @@
+{
+  "name": "run_command",
+  "args": {
+    "CommandLine": "git restore public/index.html",
+    "Cwd": "e:\\inventory_tracking_system",
+    "WaitMsBeforeAsync": 3000,
+    "toolAction": "Restoring index.html from git",
+    "toolSummary": "Restoring public/index.html using git restore."
+  }
+}

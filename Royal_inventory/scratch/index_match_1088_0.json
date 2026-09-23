@@ -1,0 +1,12 @@
+{
+  "name": "grep_search",
+  "args": {
+    "CaseInsensitive": false,
+    "IsRegex": false,
+    "MatchPerLine": true,
+    "Query": "tab-btn-operational",
+    "SearchPath": "e:\\inventory_tracking_system\\public",
+    "toolAction": "Searching for operational tab button",
+    "toolSummary": "Searching public/index.html for tab-btn-operational."
+  }
+}

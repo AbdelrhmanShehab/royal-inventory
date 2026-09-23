@@ -1,0 +1,10 @@
+{
+  "name": "run_command",
+  "args": {
+    "CommandLine": "Select-String -Path \"public\\index.html\" -Pattern \"مغسلة|laundry\"",
+    "Cwd": "e:\\inventory_tracking_system",
+    "WaitMsBeforeAsync": 3000,
+    "toolAction": "Searching index.html for laundry",
+    "toolSummary": "Searching index.html to see what laundry UI or tab exists."
+  }
+}
