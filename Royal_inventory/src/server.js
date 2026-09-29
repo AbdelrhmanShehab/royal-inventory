@@ -1,4 +1,5 @@
 'use strict';
+// Hierarchy updated: Laundry aligned as independent parent entity
 
 const app = require('./app');
 const config = require('./config/index');

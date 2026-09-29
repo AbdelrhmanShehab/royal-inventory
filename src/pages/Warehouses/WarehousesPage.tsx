@@ -54,7 +54,7 @@ export default function WarehousesPage() {
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('all');
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<'all' | 'child' | 'parent'>('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 8;
+  const [itemsPerPage, setItemsPerPage] = useState(50);
 
   // Alerts state
   const [pageSuccess, setPageSuccess] = useState<string | null>(null);
@@ -714,10 +714,10 @@ export default function WarehousesPage() {
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto border-t border-slate-200">
               <table className="w-full text-right border-collapse">
                 <thead>
-                  <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-600 text-xs font-bold uppercase tracking-wider">
+                  <tr className="bg-slate-100/90 border-b border-slate-200 text-slate-700 text-xs font-black uppercase tracking-wider divide-x divide-x-reverse divide-slate-200">
                     <th className="py-3.5 px-4">المستودع التشغيلي</th>
                     <th className="py-3.5 px-4">الكيان التابع له</th>
                     <th className="py-3.5 px-4">المجموعة</th>
@@ -730,11 +730,11 @@ export default function WarehousesPage() {
                     {canManageNodes && <th className="py-3.5 px-4 text-center">الإجراءات</th>}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
+                <tbody className="divide-y divide-slate-200 text-xs text-slate-700">
                   {paginatedWarehouses.map((w) => (
                     <tr
                       key={w.nodeId}
-                      className="hover:bg-blue-50/30 transition-colors duration-100 group"
+                      className="odd:bg-white even:bg-slate-50/50 hover:bg-blue-50/60 transition-colors duration-100 group divide-x divide-x-reverse divide-slate-200/80"
                     >
                       {/* Name & ID */}
                       <td className="py-3.5 px-4 font-bold text-slate-900">
@@ -873,34 +873,51 @@ export default function WarehousesPage() {
             </div>
 
             {/* Pagination Controls */}
-            {totalPages > 1 && (
-              <div className="p-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 bg-slate-50/50">
-                <span>
-                  عرض {((currentPage - 1) * itemsPerPage) + 1} إلى {Math.min(currentPage * itemsPerPage, filteredWarehouses.length)} من إجمالي {filteredWarehouses.length} مستودع
+            <div className="p-4 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs bg-slate-50/70 select-none">
+              <div className="flex items-center gap-4">
+                <span className="text-slate-500 font-bold">
+                  عرض {filteredWarehouses.length === 0 ? 0 : ((currentPage - 1) * itemsPerPage) + 1} إلى {Math.min(currentPage * itemsPerPage, filteredWarehouses.length)} من إجمالي {filteredWarehouses.length} مستودع
                 </span>
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={currentPage === 1}
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                <div className="flex items-center gap-1.5 text-slate-500 font-semibold">
+                  <span>عرض بالصفحة:</span>
+                  <select
+                    value={itemsPerPage}
+                    onChange={(e) => {
+                      setItemsPerPage(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-bold text-slate-700 focus:outline-none focus:border-blue-500 cursor-pointer"
                   >
-                    السابق
-                  </Button>
-                  <span className="px-3 py-1 font-bold text-slate-700">
-                    صفحة {currentPage} من {totalPages}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={currentPage === totalPages}
-                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  >
-                    التالي
-                  </Button>
+                    <option value={25}>25 مستودع</option>
+                    <option value={50}>50 مستودع</option>
+                    <option value={100}>100 مستودع</option>
+                    <option value={200}>200 مستودع</option>
+                  </select>
                 </div>
               </div>
-            )}
+
+              <div className="flex items-center gap-1.5">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                >
+                  السابق
+                </Button>
+                <span className="px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 font-black rounded-lg text-xs">
+                  صفحة {currentPage} من {Math.max(1, totalPages)}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage >= totalPages || totalPages === 0}
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                >
+                  التالي
+                </Button>
+              </div>
+            </div>
           </>
         )}
       </Card>

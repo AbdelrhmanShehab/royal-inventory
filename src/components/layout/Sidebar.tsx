@@ -5,7 +5,6 @@ import {
   FolderTree, 
   Package, 
   ArrowLeftRight, 
-  ClipboardList, 
   Users,
   AlertTriangle,
   Warehouse,
@@ -14,7 +13,12 @@ import {
   Activity,
   FlaskConical,
   BarChart3,
-  Settings
+  Settings,
+  Shirt,
+  Fingerprint,
+  History,
+  UserCheck,
+  Receipt
 } from 'lucide-react';
 import { ROUTES } from '../../utils/constants';
 import { useAuth } from '../../context/AuthContext';
@@ -27,8 +31,7 @@ export const Sidebar: React.FC = () => {
   const warehouseMenuItems = [
     { name: 'لوحة التحكم', path: ROUTES.DASHBOARD, icon: LayoutDashboard },
     { name: 'المخزون التشغيلي', path: ROUTES.INVENTORY, icon: Package },
-    { name: 'التحويلات الواردة والصادرة', path: ROUTES.REQUESTS, icon: ArrowLeftRight },
-    { name: 'سجل الحركات الشامل', path: ROUTES.TRANSACTIONS, icon: ClipboardList },
+    { name: 'إدارة التحويلات والحركات', path: ROUTES.REQUESTS, icon: ArrowLeftRight },
     { name: 'تقارير ونواقص المستودع', path: '/alerts', icon: AlertTriangle, permission: 'view_reports' },
     { name: 'الهيكل التنظيمي', path: ROUTES.ORGANIZATION, icon: FolderTree, permission: 'view_all_nodes' },
     { name: 'إدارة جميع المستودعات', path: '/warehouses', icon: Warehouse, permission: 'manage_nodes' },
@@ -37,12 +40,17 @@ export const Sidebar: React.FC = () => {
   ];
 
   const laundryMenuItems = [
-    { name: 'لوحة تحكم المغسلة', path: '/laundry', icon: LayoutDashboard, permission: 'view_laundry' },
-    { name: 'دورات الغسيل التشغيلية', path: '/laundry/batches', icon: Activity, permission: 'view_laundry' },
-    { name: 'الغسالات والمعدات', path: '/laundry/machines', icon: WashingMachine, permission: 'view_laundry' },
-    { name: 'الوصفات والكيماويات', path: '/laundry/recipes', icon: FlaskConical, permission: 'view_laundry' },
-    { name: 'التقارير والمطابقة', path: '/laundry/reports', icon: BarChart3, permission: 'view_laundry' },
-    { name: 'إعدادات المزامنة', path: '/laundry/settings', icon: Settings, permission: 'manage_laundry_operations' },
+    { name: 'لوحة تحكم التشغيل (المغسلة)', path: '/laundry', icon: LayoutDashboard, permission: 'view_laundry' },
+    { name: 'لوحة تحكم عهد اليونيفورم', path: '/laundry/uniform-dashboard', icon: Shirt, permission: 'manage_laundry_uniforms' },
+    { name: 'تسليم واستلام العهد (Handover)', path: '/laundry/handover', icon: UserCheck, permission: 'manage_laundry_uniforms' },
+    { name: 'تقرير سجل البصمات (حضور)', path: '/laundry/fingerprint-report', icon: Fingerprint, permission: 'view_laundry_fingerprint' },
+    { name: 'تقرير حركات العهد (العمليات)', path: '/laundry/handover-report', icon: History, permission: 'manage_laundry_uniforms' },
+    { name: 'دورات الغسيل التشغيلية', path: '/laundry/batches', icon: Activity, permission: 'manage_laundry_batches' },
+    { name: 'تذاكر غسيل النزلاء (Tickets)', path: '/laundry/tickets', icon: Receipt, permission: 'manage_laundry_tickets' },
+    { name: 'الغسالات والمعدات', path: '/laundry/machines', icon: WashingMachine, permission: 'manage_laundry_recipes' },
+    { name: 'الوصفات والكيماويات', path: '/laundry/recipes', icon: FlaskConical, permission: 'manage_laundry_recipes' },
+    { name: 'التقارير والمطابقة', path: '/laundry/reports', icon: BarChart3, permission: 'view_laundry_reports' },
+    { name: 'إعدادات المزامنة والبصمة', path: '/laundry/settings', icon: Settings, permission: 'manage_laundry_operations' },
   ];
 
   const menuItems = isLaundryMode ? laundryMenuItems : warehouseMenuItems;
@@ -55,13 +63,13 @@ export const Sidebar: React.FC = () => {
   return (
     <aside className="w-[260px] h-full bg-white border-l border-slate-200/80 flex flex-col flex-shrink-0 z-30 select-none">
       {/* Brand Header */}
-      <div className="h-[70px] border-b border-slate-100 flex items-center px-6 gap-3">
-        <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center text-white font-extrabold text-lg shadow-md shadow-blue-500/20">
-          RI
+      <div className="h-[70px] border-b border-slate-100 flex items-center px-5 gap-3">
+        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white font-black text-sm shadow-md shadow-blue-500/20 tracking-wider">
+          RRI
         </div>
         <div className="flex flex-col text-right">
-          <span className="text-sm font-bold text-slate-800 tracking-tight leading-none">رويال المطور</span>
-          <span className="text-[9px] text-slate-400 font-semibold mt-1">نظام تشغيل المخزون COMSYS</span>
+          <span className="text-xs font-black text-slate-800 tracking-tight leading-snug">Royal Resort Inventories</span>
+          <span className="text-[9px] text-slate-400 font-semibold mt-0.5">نظام تشغيل المخازن والمغسلة</span>
         </div>
       </div>
 

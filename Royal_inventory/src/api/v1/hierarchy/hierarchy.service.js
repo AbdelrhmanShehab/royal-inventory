@@ -89,15 +89,12 @@ const getDescendantChildNodeIds = (parentNodeId, allNodes) => {
   const traverse = (id) => {
     const children = allNodes.filter(n => n.parentNodeId === id);
     for (const child of children) {
-      if (child.nodeType === 'child') {
-        childIds.push(child.id);
-      } else {
-        traverse(child.id);
-      }
+      childIds.push(child.id);
+      traverse(child.id);
     }
   };
   traverse(parentNodeId);
-  return childIds;
+  return Array.from(new Set(childIds));
 };
 
 const getTree = async (groupId = null, allowedNodeIds = null) => {
@@ -108,8 +105,10 @@ const getTree = async (groupId = null, allowedNodeIds = null) => {
   }
   const allNodeStocks = await stockRepo.getAllNodesTotalStock();
   const stockMap = {};
+  const itemCountMap = {};
   allNodeStocks.forEach(s => {
-    stockMap[s.nodeId] = s.totalStock;
+    stockMap[s.nodeId] = s.totalStock || 0;
+    itemCountMap[s.nodeId] = s.itemCount || 0;
   });
 
   const tree = [];
@@ -122,16 +121,24 @@ const getTree = async (groupId = null, allowedNodeIds = null) => {
     const nodeMap = {};
     for (const node of groupNodes) {
       let nodeTotalStock = 0;
+      let nodeTotalItems = 0;
       if (node.nodeType === 'child') {
         nodeTotalStock = stockMap[node.id] || 0;
+        nodeTotalItems = itemCountMap[node.id] || 0;
       } else {
         const descendantChildIds = getDescendantChildNodeIds(node.id, allNodes);
-        nodeTotalStock = descendantChildIds.reduce((sum, cid) => sum + (stockMap[cid] || 0), 0);
+        const childrenStock = descendantChildIds.reduce((sum, cid) => sum + (stockMap[cid] || 0), 0);
+        const childrenItems = descendantChildIds.reduce((sum, cid) => sum + (itemCountMap[cid] || 0), 0);
+        const ownStock = stockMap[node.id] || 0;
+        const ownItems = itemCountMap[node.id] || 0;
+        nodeTotalStock = ownStock + childrenStock;
+        nodeTotalItems = ownItems + childrenItems;
       }
 
       nodeMap[node.id] = { 
         ...node, 
         totalStock: nodeTotalStock,
+        itemCount: nodeTotalItems,
         children: [] 
       };
     }
@@ -173,8 +180,9 @@ const getNodeStock = async (nodeId) => {
   if (targetNode.nodeType === 'child') {
     childNodeIds = [nodeId];
   } else {
-    // It's a parent node, get all child nodes under it recursively
-    childNodeIds = getDescendantChildNodeIds(nodeId, allNodes);
+    // It's a parent node: include the parent warehouse itself + all descendant child nodes
+    const descendants = getDescendantChildNodeIds(nodeId, allNodes);
+    childNodeIds = Array.from(new Set([nodeId, ...descendants]));
   }
 
   // Fetch stocks for all these child nodes

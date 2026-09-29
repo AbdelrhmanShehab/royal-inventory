@@ -79,7 +79,8 @@ export default function LaundryReturnsTab({ onSuccess }: LaundryReturnsTabProps)
   // Build active transfers (transfers that have outstanding items at the laundry)
   const activeLaundryTransfers = useMemo(() => {
     return scopedTransfers.filter(t => {
-      // If transfer status is sent or partially_received or items remaining > 0
+      // Exclude transfers whose returns are already completed
+      if (t.returnStatus === 'completed') return false;
       return t.status === 'sent' || t.status === 'received' || t.status === 'partially_received';
     });
   }, [scopedTransfers]);

@@ -40,6 +40,7 @@ const statusLabels: Record<TransferStatus, { text: string; variant: 'neutral' | 
 
 const txnTypeLabels: Record<string, string> = {
   internal_transfer: 'تحويل بين مستودعات',
+  laundry: 'إرسال للمغسلة',
   consumption: 'استهلاك تشغيلي',
   return: 'مرتجع للمخزن الرئيسي',
   damage: 'تلف مواد/أصل',
@@ -236,6 +237,22 @@ export const TransferDetailsModal: React.FC<TransferDetailsModalProps> = ({
                   <p className="font-bold text-slate-800">{transfer.reason || 'لا يوجد سبب محدد'}</p>
                   <p className="text-[10px] text-slate-500">{transfer.notes || 'لا توجد ملاحظات إضافية'}</p>
                 </div>
+
+                {((transfer as any).confirmedBy || (transfer as any).confirmedAt) && (
+                  <div className="bg-emerald-50 border border-emerald-200 p-3.5 rounded-xl space-y-1 md:col-span-2">
+                    <span className="text-[10px] text-emerald-700 flex items-center gap-1 font-semibold">
+                      <CheckCircle2 size={12} /> استلام وتأكيد الشحنة النهائي:
+                    </span>
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <p className="font-bold text-emerald-900">
+                        تم الاستلام بواسطة: {(transfer as any).confirmerNameAr || (transfer as any).confirmerUsername || `مستخدم #${(transfer as any).confirmedBy}`}
+                      </p>
+                      <p className="text-xs text-emerald-700 font-mono flex items-center gap-1">
+                        <Clock size={11} /> {(transfer as any).confirmedAt ? new Date((transfer as any).confirmedAt).toLocaleString('ar-SA') : '—'}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Items Table */}
@@ -280,8 +297,8 @@ export const TransferDetailsModal: React.FC<TransferDetailsModalProps> = ({
                   {/* DRAFT STATE ACTIONS */}
                   {transfer.status === 'draft' && (
                     <>
-                      {/* Submit for Approval (for transfer/return) */}
-                      {(transfer.txnType === 'internal_transfer' || transfer.txnType === 'return') && hasPermission('submit_approval') && (
+                      {/* Submit for Approval (for transfer/return/laundry or multi-node movements) */}
+                      {(transfer.toNodeId != null || transfer.txnType === 'internal_transfer' || transfer.txnType === 'return' || transfer.txnType === 'laundry') && (hasPermission('submit_approval') || hasPermission('transfer:submit_approval')) && (
                         <Button 
                           variant="primary" 
                           size="sm" 
@@ -294,8 +311,8 @@ export const TransferDetailsModal: React.FC<TransferDetailsModalProps> = ({
                         </Button>
                       )}
 
-                      {/* Confirm (for single-node: consumption, waste, damage, disposal) */}
-                      {transfer.txnType !== 'internal_transfer' && transfer.txnType !== 'return' && hasPermission('confirm_transfer') && (
+                      {/* Confirm (only for single-node: consumption, waste, damage, disposal without destination) */}
+                      {transfer.toNodeId == null && transfer.txnType !== 'internal_transfer' && transfer.txnType !== 'return' && transfer.txnType !== 'laundry' && (hasPermission('confirm_transfer') || hasPermission('transfer:confirm')) && (
                         <Button 
                           variant="primary" 
                           size="sm" 

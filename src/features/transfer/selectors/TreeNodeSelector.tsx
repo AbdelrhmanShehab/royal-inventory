@@ -38,12 +38,12 @@ const TreeNodeItem: React.FC<{
   level?: number;
 }> = ({ node, selectedId, excludeNodeId, onSelect, level = 0 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
-  const isGroup = node.id.startsWith('group-');
+  const isGroup = node.id.startsWith('group-') || node.type === 'group';
   const numId = isGroup ? NaN : Number(node.id);
   const hasChildren = Boolean(node.children && node.children.length > 0);
-  const isParentContainer = isGroup || node.type === 'hotel' || node.type === 'group' || hasChildren;
-  const isSelected = !isParentContainer && !isNaN(numId) && numId === selectedId;
-  const isExcluded = !isParentContainer && !isNaN(numId) && excludeNodeId !== undefined && excludeNodeId !== '' && numId === Number(excludeNodeId);
+  const isSelectable = !isGroup && !isNaN(numId);
+  const isSelected = isSelectable && numId === selectedId;
+  const isExcluded = isSelectable && excludeNodeId !== undefined && excludeNodeId !== '' && numId === Number(excludeNodeId);
   const isInactive = node.status === 'inactive' && !isGroup;
 
   return (
@@ -51,9 +51,9 @@ const TreeNodeItem: React.FC<{
       <div 
         onClick={() => {
           if (isExcluded || isInactive) return;
-          if (isParentContainer) {
+          if (isGroup) {
             setIsExpanded(!isExpanded);
-          } else if (!isNaN(numId)) {
+          } else if (isSelectable) {
             onSelect(numId, node.name);
           }
         }}
@@ -61,7 +61,7 @@ const TreeNodeItem: React.FC<{
         className={`py-2 pl-3 flex items-center justify-between text-xs transition-colors ${
           (isExcluded || isInactive)
             ? 'opacity-40 bg-slate-100/80 text-slate-400 cursor-not-allowed'
-            : isParentContainer
+            : isGroup
             ? 'hover:bg-slate-100/70 text-slate-800 font-bold cursor-pointer bg-slate-50/60'
             : isSelected 
             ? 'bg-blue-50 text-blue-900 font-bold cursor-pointer' 
@@ -70,20 +70,32 @@ const TreeNodeItem: React.FC<{
       >
         <div className="flex items-center gap-2">
           {hasChildren ? (
-            <span 
-              onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
-              className="text-slate-400 hover:text-slate-700 p-0.5"
+            <button
+              type="button"
+              onClick={(e) => { 
+                e.stopPropagation(); 
+                setIsExpanded(!isExpanded); 
+              }}
+              className="text-slate-400 hover:text-slate-700 p-0.5 rounded hover:bg-slate-200/60 transition-colors"
+              title={isExpanded ? 'طي الفروع' : 'عرض الفروع'}
             >
               {isExpanded ? <ChevronDown size={14} /> : <ChevronLeft size={14} />}
-            </span>
+            </button>
           ) : (
-            <span className="w-3.5"></span>
+            <span className="w-4"></span>
           )}
           {getNodeIcon(node.type)}
-          <span className={isInactive ? 'line-through decoration-slate-300' : ''}>{node.name}</span>
-          {isParentContainer && (
+          <span className={`${isInactive ? 'line-through decoration-slate-300' : ''} ${hasChildren ? 'font-bold' : ''}`}>
+            {node.name}
+          </span>
+          {isGroup && (
             <span className="text-[9px] text-purple-700 bg-purple-50 px-1.5 py-0.2 rounded border border-purple-200 font-bold">
-              {node.type === 'group' ? 'مجموعة' : 'كيان أم (فندق)'}
+              مجموعة
+            </span>
+          )}
+          {!isGroup && hasChildren && (
+            <span className="text-[9px] text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200 font-bold">
+              مستودع رئيسي / مباشر
             </span>
           )}
           {isExcluded && (
@@ -97,8 +109,8 @@ const TreeNodeItem: React.FC<{
             </span>
           )}
         </div>
-        {!isParentContainer && isSelected && <Check size={14} className="text-blue-600 flex-shrink-0" />}
-        {isParentContainer && (
+        {isSelected && <Check size={14} className="text-blue-600 flex-shrink-0" />}
+        {isGroup && (
           <span className="text-slate-400 p-0.5">
             {isExpanded ? <ChevronDown size={14} /> : <ChevronLeft size={14} />}
           </span>
@@ -150,15 +162,13 @@ export const TreeNodeSelector: React.FC<TreeNodeSelectorProps> = ({
     return filtered.length > 0 ? filtered : treeNodes;
   }, [treeNodes, isGlobalAdmin, currentNodeId]);
 
-  // Find selected node name recursively (operational nodes only)
+  // Find selected node name recursively (supports both parent entities and leaf operational nodes)
   const findNodeName = (nodes: OrganizationNode[], targetId?: number | ''): string | null => {
     if (!targetId) return null;
     for (const node of nodes) {
       if (!node.id.startsWith('group-')) {
         const numId = Number(node.id);
-        const hasChildren = Boolean(node.children && node.children.length > 0);
-        const isParent = node.type === 'hotel' || node.type === 'group' || hasChildren;
-        if (numId === targetId && !isParent) return node.name;
+        if (numId === targetId) return node.name;
       }
       if (node.children) {
         const found = findNodeName(node.children, targetId);

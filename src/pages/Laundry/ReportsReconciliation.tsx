@@ -478,8 +478,8 @@ export default function ReportsReconciliation() {
           return {
             itemCode: i.itemCode,
             actualQty: Number(i.actualQty),
-            rejectReason: isDiff ? (i.rejectReason || 'Damaged') : null,
-            rejectNotes: isDiff ? (i.rejectNotes || 'تالف أو عجز استلام بالمغسلة') : null
+            rejectReason: i.rejectReason || (isDiff ? 'Wrong Quantity' : null),
+            rejectNotes: i.rejectNotes || (isDiff ? 'عجز في استلام المغسلة' : null)
           };
         })
       });
@@ -1832,36 +1832,41 @@ export default function ReportsReconciliation() {
                         </td>
                         <td className="px-3 py-2 text-center">
                           <select
-                            disabled={!hasDiff}
                             value={item.rejectReason}
                             onChange={(e) => {
+                              const val = e.target.value;
                               setReceiveForm(prev => ({
                                 ...prev,
-                                items: prev.items.map((itm, iIdx) => iIdx === idx ? { ...itm, rejectReason: e.target.value } : itm)
+                                items: prev.items.map((itm, iIdx) => iIdx === idx ? { ...itm, rejectReason: val } : itm)
                               }));
                             }}
-                            className="px-1 py-1 border rounded text-xs bg-slate-50 disabled:bg-slate-100 text-slate-800 font-bold"
+                            className={`px-2 py-1 border rounded-lg text-xs font-bold text-slate-800 transition-all ${
+                              hasDiff ? 'border-amber-400 bg-amber-50/50' : 'border-slate-200 bg-white'
+                            }`}
                           >
-                            <option value="">-- لا يوجد --</option>
+                            <option value="">-- اختر السبب --</option>
                             <option value="Damaged">تالف (Damaged)</option>
                             <option value="Wrong Quantity">خطأ بالعد (Wrong Quantity)</option>
                             <option value="Wet">مبتل ورطب (Wet)</option>
                             <option value="Wrong Item">صنف خطأ (Wrong Item)</option>
+                            <option value="Stained">بقع مستعصية (Stained)</option>
+                            <option value="Good Condition">سليم تماماً (Good Condition)</option>
+                            <option value="Other">أخرى (Other)</option>
                           </select>
                         </td>
                         <td className="px-3 py-2 text-center">
                           <input
                             type="text"
-                            disabled={!hasDiff}
-                            placeholder="ملاحظات العجز"
+                            placeholder={hasDiff ? "ملاحظات العجز..." : "ملاحظات الفحص..."}
                             value={item.rejectNotes}
                             onChange={(e) => {
+                              const val = e.target.value;
                               setReceiveForm(prev => ({
                                 ...prev,
-                                items: prev.items.map((itm, iIdx) => iIdx === idx ? { ...itm, rejectNotes: e.target.value } : itm)
+                                items: prev.items.map((itm, iIdx) => iIdx === idx ? { ...itm, rejectNotes: val } : itm)
                               }));
                             }}
-                            className="px-1.5 py-1 border rounded text-[10px] w-24 bg-white"
+                            className="px-2 py-1 border border-slate-200 rounded-lg text-xs w-32 bg-white focus:outline-none focus:border-blue-500 font-medium"
                           />
                         </td>
                       </tr>
@@ -1871,12 +1876,16 @@ export default function ReportsReconciliation() {
               </table>
             </div>
 
-            <Input
-              label="ملاحظات عامة حول الاستلام"
-              placeholder="مثال: استلام متأخر مع عجز طفيف"
-              value={receiveForm.notes}
-              onChange={(e) => setReceiveForm({ ...receiveForm, notes: e.target.value })}
-            />
+            <div className="flex flex-col gap-1 text-right">
+              <label className="text-xs font-bold text-slate-700">ملاحظات عامة حول الاستلام</label>
+              <textarea
+                rows={2}
+                placeholder="مثال: استلام سليم مع عجز خفيف أو ملاحظات حول حالة الشحنة..."
+                value={receiveForm.notes}
+                onChange={(e) => setReceiveForm(prev => ({ ...prev, notes: e.target.value }))}
+                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-500 font-medium"
+              />
+            </div>
 
             <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-slate-100">
               <Button type="button" variant="outline" onClick={() => setSelectedReceiveTransfer(null)}>إلغاء</Button>

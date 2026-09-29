@@ -267,12 +267,21 @@ const getTransferById = async (transferId) => {
         .query(`
           SELECT ti.transfer_item_id AS itemId, ti.item_code AS itemCode, ti.item_name_ar AS itemNameAr,
                  ti.sent_qty AS sentQty, ti.received_qty AS receivedQty,
-                 (ti.received_qty - ISNULL((
-                    SELECT SUM(CASE WHEN r.status = 'completed' THEN ri.actual_qty ELSE ri.expected_qty END)
-                    FROM ops.laundry_return_items ri
-                    INNER JOIN ops.laundry_returns r ON ri.return_id = r.return_id
-                    WHERE r.transfer_id = ti.transfer_id AND ri.item_code = ti.item_code AND r.status != 'rejected'
-                 ), 0)) AS remainingQty,
+                 CASE 
+                   WHEN (COALESCE(NULLIF(ti.received_qty, 0), ti.sent_qty, 0) - ISNULL((
+                      SELECT SUM(CASE WHEN r.status = 'completed' THEN ri.actual_qty ELSE ri.expected_qty END)
+                      FROM ops.laundry_return_items ri
+                      INNER JOIN ops.laundry_returns r ON ri.return_id = r.return_id
+                      WHERE r.transfer_id = ti.transfer_id AND ri.item_code = ti.item_code AND r.status != 'rejected'
+                   ), 0)) > 0
+                   THEN (COALESCE(NULLIF(ti.received_qty, 0), ti.sent_qty, 0) - ISNULL((
+                      SELECT SUM(CASE WHEN r.status = 'completed' THEN ri.actual_qty ELSE ri.expected_qty END)
+                      FROM ops.laundry_return_items ri
+                      INNER JOIN ops.laundry_returns r ON ri.return_id = r.return_id
+                      WHERE r.transfer_id = ti.transfer_id AND ri.item_code = ti.item_code AND r.status != 'rejected'
+                   ), 0))
+                   ELSE 0
+                 END AS remainingQty,
                  ti.unit_code AS unitCode, ti.unit_cost AS unitCost
           FROM ops.laundry_transfer_items ti
           WHERE ti.transfer_id = @transferId
@@ -808,10 +817,10 @@ const getTicketById = async (ticketId) => {
       .query(`
         SELECT t.ticket_id AS id, t.ticket_type AS ticketType, t.guest_name AS guestName, t.room_number AS roomNumber,
                t.employee_id AS employeeId, t.special_notes AS specialNotes, t.delivery_time AS deliveryTime,
-               t.status, t.pos_sale_id AS posSaleId, t.created_by AS createdBy, u.username AS creatorUsername,
+               t.status, t.pos_sale_id AS posSaleId, t.created_by AS createdBy, COALESCE(u.full_name_ar, u.username, N'النظام') AS creatorUsername,
                t.created_at AS createdAt, t.updated_at AS updatedAt
         FROM ops.laundry_tickets t
-        INNER JOIN ops.app_users u ON t.created_by = u.user_id
+        LEFT JOIN ops.app_users u ON t.created_by = u.user_id
         WHERE t.ticket_id = @ticketId
       `);
     const header = headerResult.recordset[0] ?? null;
@@ -819,9 +828,16 @@ const getTicketById = async (ticketId) => {
       const itemsResult = await pool.request()
         .input('ticketId', sql.Int, ticketId)
         .query(`
-          SELECT ticket_item_id AS itemId, service_item_code AS serviceItemCode, quantity, unit_price AS unitPrice, total_price AS totalPrice
-          FROM ops.laundry_ticket_items
-          WHERE ticket_id = @ticketId
+          SELECT 
+            ti.ticket_item_id AS itemId, 
+            ti.service_item_code AS serviceItemCode, 
+            COALESCE(ci.item_name_ar, ti.service_item_code) AS itemNameAr,
+            ti.quantity, 
+            ti.unit_price AS unitPrice, 
+            COALESCE(NULLIF(ti.total_price, 0), ti.quantity * ti.unit_price) AS totalPrice
+          FROM ops.laundry_ticket_items ti
+          LEFT JOIN ops.comsys_items ci ON ti.service_item_code = ci.item_code
+          WHERE ti.ticket_id = @ticketId
         `);
       header.items = itemsResult.recordset;
     }
@@ -835,12 +851,25 @@ const getTickets = async () => {
   try {
     const pool = getSystemDB();
     const result = await pool.request().query(`
-      SELECT t.ticket_id AS id, t.ticket_type AS ticketType, t.guest_name AS guestName, t.room_number AS roomNumber,
-             t.employee_id AS employeeId, t.special_notes AS specialNotes, t.delivery_time AS deliveryTime,
-             t.status, t.pos_sale_id AS posSaleId, t.created_by AS createdBy, u.username AS creatorUsername,
-             t.created_at AS createdAt, t.updated_at AS updatedAt
+      SELECT 
+        t.ticket_id AS id, 
+        t.ticket_type AS ticketType, 
+        t.guest_name AS guestName, 
+        t.room_number AS roomNumber,
+        t.employee_id AS employeeId, 
+        t.special_notes AS specialNotes, 
+        t.delivery_time AS deliveryTime,
+        t.status, 
+        t.pos_sale_id AS posSaleId, 
+        t.created_by AS createdBy, 
+        COALESCE(u.full_name_ar, u.username, N'النظام') AS creatorUsername,
+        t.created_at AS createdAt, 
+        t.updated_at AS updatedAt,
+        (SELECT COUNT(*) FROM ops.laundry_ticket_items WHERE ticket_id = t.ticket_id) AS itemCount,
+        (SELECT COALESCE(SUM(quantity * unit_price), 0) FROM ops.laundry_ticket_items WHERE ticket_id = t.ticket_id) AS totalPrice
       FROM ops.laundry_tickets t
-      INNER JOIN ops.app_users u ON t.created_by = u.user_id
+      LEFT JOIN ops.app_users u ON t.created_by = u.user_id
+      ORDER BY t.ticket_id DESC
     `);
     return result.recordset;
   } catch (err) {

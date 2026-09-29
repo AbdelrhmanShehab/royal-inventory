@@ -556,22 +556,22 @@ export default function AlertsPage() {
       ) : viewMode === 'table' ? (
 
         /* TABLE VIEW */
-        <Card className="border-slate-200/80 overflow-hidden shadow-xs">
+        <Card className="border border-slate-200/80 overflow-hidden shadow-xs rounded-xl">
           <div className="w-full overflow-x-auto">
             <table className="w-full text-right border-collapse select-none">
-              <thead className="bg-slate-50/75 border-b border-slate-100">
-                <tr>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500">كود الصنف</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500">اسم الصنف والفئة</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500">الموقع / المستودع</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 text-center">الرصيد المتاح / حد التنبيه</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 text-center">نسبة التوفر</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 text-center">حالة التنبيه</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 text-left">العجز والكمية المقترحة</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 text-center">إجراء سريع</th>
+              <thead className="bg-slate-100/90 border-b border-slate-200 text-slate-700 font-black text-xs">
+                <tr className="divide-x divide-x-reverse divide-slate-200">
+                  <th className="px-5 py-3.5">كود الصنف</th>
+                  <th className="px-5 py-3.5">اسم الصنف والفئة</th>
+                  <th className="px-5 py-3.5">الموقع / المستودع</th>
+                  <th className="px-5 py-3.5 text-center">الرصيد المتاح / حد التنبيه</th>
+                  <th className="px-5 py-3.5 text-center">نسبة التوفر</th>
+                  <th className="px-5 py-3.5 text-center">حالة التنبيه</th>
+                  <th className="px-5 py-3.5 text-left">العجز والكمية المقترحة</th>
+                  <th className="px-5 py-3.5 text-center">إجراء سريع</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-200 text-xs">
                 {filteredAlerts.map((alertItem) => {
                   const isCritical = alertItem.status === 'out_of_stock';
                   const ratio = alertItem.reorderLevel > 0 
@@ -579,7 +579,7 @@ export default function AlertsPage() {
                     : 0;
 
                   return (
-                    <tr key={alertItem.id} className="hover:bg-slate-50/60 transition-colors">
+                    <tr key={alertItem.id} className="odd:bg-white even:bg-slate-50/50 hover:bg-blue-50/60 transition-colors divide-x divide-x-reverse divide-slate-200/80">
                       {/* SKU */}
                       <td className="px-6 py-4 text-xs font-bold text-slate-700">
                         <span className="px-2.5 py-1 bg-slate-100 rounded-md font-mono text-[11px]">

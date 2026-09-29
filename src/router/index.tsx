@@ -3,7 +3,6 @@ import { createBrowserRouter } from "react-router-dom";
 import DashboardPage from "../pages/Dashboard/DashboardPage";
 import OrganizationPage from "../pages/Organization/OrganizationPage";
 import InventoryPage from "../pages/Inventory/InventoryPage";
-import TransactionsPage from "../pages/Transactions/TransactionsPage";
 import TransferPage from "../features/transfer/pages/TransferPage";
 import UsersPage from "../pages/Users/UsersPage";
 import AlertsPage from "../pages/Alerts/AlertsPage";
@@ -20,6 +19,11 @@ import MachinesPrograms from "../pages/Laundry/MachinesPrograms";
 import RecipesChemicals from "../pages/Laundry/RecipesChemicals";
 import ReportsReconciliation from "../pages/Laundry/ReportsReconciliation";
 import SettingsPage from "../pages/Laundry/SettingsPage";
+import UniformDashboard from "../pages/Laundry/UniformDashboard";
+import HandoverReceivePage from "../pages/Laundry/HandoverReceivePage";
+import FingerprintReportPage from "../pages/Laundry/FingerprintReportPage";
+import HandoverReportPage from "../pages/Laundry/HandoverReportPage";
+import LaundryTicketsPage from "../pages/Laundry/LaundryTicketsPage";
 
 export const router = createBrowserRouter([
   {
@@ -52,7 +56,7 @@ export const router = createBrowserRouter([
       },
       {
         path: "transactions",
-        element: <TransactionsPage />,
+        element: <TransferPage />,
       },
       {
         path: "requests",
@@ -140,6 +144,46 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute anyPermission={["view_laundry", "manage_laundry_operations", "receive_laundry_items", "view_laundry_pos"]}>
             <ReportsReconciliation />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "laundry/uniform-dashboard",
+        element: (
+          <ProtectedRoute anyPermission={["view_laundry", "manage_laundry_operations", "receive_laundry_items"]}>
+            <UniformDashboard />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "laundry/handover",
+        element: (
+          <ProtectedRoute anyPermission={["view_laundry", "manage_laundry_operations", "receive_laundry_items"]}>
+            <HandoverReceivePage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "laundry/fingerprint-report",
+        element: (
+          <ProtectedRoute anyPermission={["view_laundry", "manage_laundry_operations", "receive_laundry_items"]}>
+            <FingerprintReportPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "laundry/handover-report",
+        element: (
+          <ProtectedRoute anyPermission={["view_laundry", "manage_laundry_operations", "receive_laundry_items"]}>
+            <HandoverReportPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "laundry/tickets",
+        element: (
+          <ProtectedRoute anyPermission={["view_laundry", "manage_laundry_operations", "receive_laundry_items"]}>
+            <LaundryTicketsPage />
           </ProtectedRoute>
         ),
       },

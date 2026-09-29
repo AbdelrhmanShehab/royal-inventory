@@ -13,7 +13,12 @@ const ROLES = [
   { key: 'warehouse_manager', label: 'مدير مستودع', desc: 'إدارة مخازن معينة ومتابعة الشحنات والتحويلات' },
   { key: 'warehouse_head', label: 'أمين مستودع', desc: 'عمليات الشحن والاستلام والتحويل والصرف' },
   { key: 'accountant', label: 'محاسب', desc: 'الاطلاع على حركة المخزون والتقارير المالية' },
-  { key: 'staff', label: 'موظف تشغيل', desc: 'صرف واستهلاك مباشر للمواد في الفرع' }
+  { key: 'staff', label: 'موظف تشغيل', desc: 'صرف واستهلاك مباشر للمواد في الفرع' },
+  // Laundry Roles
+  { key: 'laundry_supervisor', label: 'مشرف المغسلة', desc: 'إشراف ومتابعة كاملة للمعدات، الوصفات، ودورات الغسيل' },
+  { key: 'laundry_cashier', label: 'كاشير المغسلة', desc: 'إصدار تذاكر النزلاء، الفواتير، ونقاط البيع' },
+  { key: 'uniform_clerk', label: 'أمين عهد اليونيفورم', desc: 'تسليم واستلام عهد اليونيفورم للموظفين عبر البصمة' },
+  { key: 'laundry_operator', label: 'مشغل مغسلة', desc: 'تشغيل دورات الغسيل، الأوزان، ومتابعة الغسالات' },
 ];
 
 // Permission Keys mapping with Arabic labels and descriptions
@@ -33,10 +38,16 @@ const PERMISSIONS = [
   { key: 'view_reports', label: 'استعراض التقارير والنواقص', desc: 'تتبع مستويات الطلب وتنبيهات النواقص وتصدير التقارير' },
   { key: 'manage_permissions', label: 'إدارة أدوار وصلاحيات النظام', desc: 'تعديل جدول الصلاحيات الحالي وتوزيعه على الأدوار' },
   // Laundry Permissions
-  { key: 'view_laundry', label: 'مشاهدة المغسلة (عرض فقط)', desc: 'الاطلاع على لوحة تحكم ودورات وتقارير المغسلة دون صلاحيات تعديل أو إضافة' },
-  { key: 'manage_laundry_operations', label: 'إدارة عمليات ومدخلات المغسلة', desc: 'صلاحية بدء دورات الغسيل، إضافة الأوزان، تعديل الدوزنات، وتصميم الوصفات والبرامج كلياً' },
+  { key: 'view_laundry', label: 'مشاهدة المغسلة (لوحة التحكم الرئيسية)', desc: 'الاطلاع على لوحة تحكم تشغيل المغسلة وحالة الدورات العامة' },
+  { key: 'manage_laundry_tickets', label: 'تذاكر غسيل النزلاء (كاشير)', desc: 'إصدار تذاكر النزلاء والموظفين، تحصيل الفواتير، وتسليم واستلام الملابس' },
+  { key: 'manage_laundry_uniforms', label: 'تسليم واستلام عهد اليونيفورم (بصمة)', desc: 'صلاحية تسليم واستلام قطع اليونيفورم للموظفين وتوثيق الحركات بالبصمة' },
+  { key: 'view_laundry_fingerprint', label: 'سجلات البصمة وحضور المغسلة', desc: 'الاطلاع على تقارير بصمات حضور الموظفين الخاصة بالمغسلة وتفاصيل البصمة' },
+  { key: 'manage_laundry_batches', label: 'دورات الغسيل التشغيلية (Batches)', desc: 'بدء وإنهاء دورات الغسيل، تسجيل الأوزان، وتحديد الغسالات المستخدمة' },
+  { key: 'manage_laundry_recipes', label: 'إدارة الغسالات والوصفات والكيماويات', desc: 'إضافة وتعديل الغسالات، برامج الغسيل، وتحديد جرعات ونسب الكيماويات' },
   { key: 'receive_laundry_items', label: 'استلام شحنات البياضات للمغسلة', desc: 'صلاحية تأكيد فحص واستلام شحنات البياضات المتسخة وتأكيد مطابقتها وتوثيق فروقات الاستلام' },
-  { key: 'view_laundry_pos', label: 'عرض مبيعات ونقاط بيع المغسلة', desc: 'الاطلاع على حركة ومبيعات مغسلة النزلاء والموظفين ومزامنة فواتير كومسيس التابعة للمغسلة' }
+  { key: 'view_laundry_pos', label: 'مزامنة فواتير نقاط بيع كومسيس (POS)', desc: 'الاطلاع على حركة ومبيعات مغسلة النزلاء ومزامنة فواتير كومسيس التابعة للمغسلة' },
+  { key: 'view_laundry_reports', label: 'تقارير المغسلة والمطابقة المالية', desc: 'الاطلاع على تقارير ربحية التشغيل ومطابقة البياضات والمخزون' },
+  { key: 'manage_laundry_operations', label: 'إعدادات المغسلة والربط التقني', desc: 'التحكم في إعدادات المزامنة التلقائية ومعاملات أجهزة البصمة' },
 ];
 
 export const RolesPermissionsPage: React.FC = () => {
@@ -228,16 +239,32 @@ export const RolesPermissionsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Dirty state alert prompt */}
+      {/* Sticky Bottom Floating Bar for unsaved changes */}
       {isDirty && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between gap-3 text-xs font-semibold text-amber-800 animate-fade-in">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900/95 text-white px-5 py-3 rounded-2xl shadow-2xl border border-slate-700/80 backdrop-blur-md flex items-center gap-4 animate-fade-in text-xs font-semibold">
           <div className="flex items-center gap-2">
-            <AlertCircle size={16} className="text-amber-600 flex-shrink-0" />
-            <span>لديك عدد {pendingUpdates.length} تغييرات غير محفوظة في جدول الصلاحيات. اضغط "حفظ التغييرات" للاعتماد.</span>
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
+            <span>لديك <strong>{pendingUpdates.length}</strong> تعديلات غير محفوظة في جدول الصلاحيات</span>
           </div>
-          <button onClick={handleDiscard} className="underline text-amber-900 hover:text-amber-700 text-xs cursor-pointer font-bold">
-            إلغاء التغييرات
-          </button>
+          <div className="flex items-center gap-2 mr-2">
+            <button
+              type="button"
+              onClick={handleDiscard}
+              className="text-slate-300 hover:text-white px-3 py-1.5 rounded-lg border border-slate-700 hover:bg-slate-800 text-xs transition-colors cursor-pointer"
+            >
+              إلغاء التغييرات
+            </button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleSave}
+              disabled={saveMutation.isPending}
+              className="gap-1.5 text-xs py-1.5 h-auto shadow-md"
+            >
+              <Save size={13} />
+              {saveMutation.isPending ? 'جاري الحفظ...' : 'حفظ التغييرات الآن'}
+            </Button>
+          </div>
         </div>
       )}
 
@@ -293,26 +320,30 @@ export const RolesPermissionsPage: React.FC = () => {
 
                         return (
                           <td key={role.key} className={`px-4 py-4 text-center border-r border-slate-100 ${isModified ? 'bg-amber-50/40' : ''}`}>
-                            <label className="inline-flex items-center justify-center cursor-pointer select-none">
-                              <input
-                                type="checkbox"
-                                checked={isChecked}
-                                disabled={saveMutation.isPending}
-                                onChange={() => handleToggle(role.key, perm.key)}
-                                className="sr-only peer"
-                              />
-                              <div className={`
-                                w-9 h-5 bg-slate-200 rounded-full peer 
-                                peer-focus:ring-1 peer-focus:ring-blue-300 
-                                peer-checked:after:-translate-x-full 
-                                peer-checked:after:border-white after:content-[''] 
-                                after:absolute after:top-0.5 after:right-[2px] 
-                                after:bg-white after:border-slate-300 after:border 
-                                after:rounded-full after:h-4 after:w-4 after:transition-all 
-                                peer-checked:bg-blue-600 relative transition-colors duration-200
+                            <button
+                              type="button"
+                              role="switch"
+                              aria-checked={isChecked}
+                              disabled={saveMutation.isPending}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleToggle(role.key, perm.key);
+                              }}
+                              className={`
+                                w-9 h-5 rounded-full relative transition-colors duration-200 cursor-pointer focus:outline-none inline-flex items-center p-0.5 select-none
+                                ${isChecked ? 'bg-blue-600' : 'bg-slate-200'}
                                 ${isModified ? 'ring-2 ring-amber-400' : ''}
-                              `}></div>
-                            </label>
+                                ${saveMutation.isPending ? 'opacity-50 cursor-not-allowed' : ''}
+                              `}
+                            >
+                              <span
+                                className={`
+                                  inline-block w-4 h-4 rounded-full bg-white shadow-xs transition-transform duration-200 border border-slate-300 pointer-events-none
+                                  ${isChecked ? '-translate-x-4' : 'translate-x-0'}
+                                `}
+                              />
+                            </button>
                           </td>
                         );
                       })}

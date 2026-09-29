@@ -80,7 +80,12 @@ export interface TransferSummary {
   toNodeId?: number | null;
   toNodeNameAr?: string;
   createdBy: number | string;
+  creatorUsername?: string;
   createdByNameAr?: string;
+  confirmedBy?: number | string;
+  confirmerUsername?: string;
+  confirmerNameAr?: string;
+  confirmedAt?: string;
   createdAt: string;
   updatedAt?: string;
   itemCount: number;

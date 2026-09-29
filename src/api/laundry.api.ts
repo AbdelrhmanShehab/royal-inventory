@@ -147,8 +147,14 @@ export const laundryApi = {
     return api.get('/laundry/pos-sync/status').then(res => res.data);
   },
   // ZK Custody & Attendance Integration
-  getZkCheckins: async (limit: number = 10): Promise<any> => {
+  getZkCheckins: async (limit: number = 50): Promise<any> => {
     return api.get(`/laundry/zk/checkins?limit=${limit}`).then(res => res.data);
+  },
+  getZkTransactions: async (params?: { limit?: number; action?: string; search?: string }): Promise<any> => {
+    return api.get('/laundry/zk/transactions', { params }).then(res => res.data);
+  },
+  getZkEmployees: async (search?: string): Promise<any> => {
+    return api.get('/laundry/zk/employees', { params: { search } }).then(res => res.data);
   },
   getZkEmployeeDetails: async (userCode: string): Promise<any> => {
     return api.get(`/laundry/zk/employee/${encodeURIComponent(userCode)}`).then(res => res.data);

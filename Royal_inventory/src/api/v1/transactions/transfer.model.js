@@ -34,17 +34,20 @@ class TransferLine {
  * TransferTransaction Entity Model
  */
 class TransferTransaction {
-  constructor({ txnId, txnType, nodeId, createdBy, creatorUsername, txnDate, notes, status, confirmedBy, confirmedAt, fromNodeId, fromNodeNameAr, toNodeId, toNodeNameAr, reason, lines = [], createdAt, confirmerUsername, itemCount }) {
+  constructor({ txnId, txnType, nodeId, createdBy, creatorUsername, createdByNameAr, txnDate, notes, status, confirmedBy, confirmedAt, confirmerUsername, confirmerNameAr, fromNodeId, fromNodeNameAr, toNodeId, toNodeNameAr, reason, lines = [], createdAt, itemCount, timeline = [] }) {
     this.txnId = txnId;
     this.txnType = txnType;
     this.nodeId = nodeId;
     this.createdBy = createdBy;
     this.creatorUsername = creatorUsername || null;
+    this.createdByNameAr = createdByNameAr || null;
     this.txnDate = txnDate;
     this.notes = notes || null;
     this.status = status;
     this.confirmedBy = confirmedBy || null;
     this.confirmedAt = confirmedAt || null;
+    this.confirmerUsername = confirmerUsername || null;
+    this.confirmerNameAr = confirmerNameAr || null;
     this.fromNodeId = fromNodeId;
     this.fromNodeNameAr = fromNodeNameAr || null;
     this.toNodeId = toNodeId;
@@ -52,8 +55,8 @@ class TransferTransaction {
     this.reason = reason || null;
     this.lines = lines;
     this.createdAt = createdAt || null;
-    this.confirmerUsername = confirmerUsername || null;
     this.itemCount = itemCount !== undefined ? Number(itemCount) : (lines ? lines.length : 0);
+    this.timeline = timeline;
   }
 
   static fromDatabase(row) {
@@ -64,11 +67,14 @@ class TransferTransaction {
       nodeId: row.nodeId,
       createdBy: row.createdBy,
       creatorUsername: row.creatorUsername,
+      createdByNameAr: row.createdByNameAr,
       txnDate: row.txnDate,
       notes: row.notes,
       status: row.status,
       confirmedBy: row.confirmedBy,
       confirmedAt: row.confirmedAt,
+      confirmerUsername: row.confirmerUsername,
+      confirmerNameAr: row.confirmerNameAr,
       fromNodeId: row.fromNodeId,
       fromNodeNameAr: row.fromNodeNameAr,
       toNodeId: row.toNodeId,
@@ -76,8 +82,8 @@ class TransferTransaction {
       reason: row.reason,
       lines: [], // to be set from lines table query
       createdAt: row.createdAt,
-      confirmerUsername: row.confirmerUsername,
       itemCount: row.itemCount !== undefined ? Number(row.itemCount) : 0,
+      timeline: row.timeline || [],
     });
   }
 

@@ -6,7 +6,7 @@ const { DatabaseError, AppError } = require('../../utils/errors');
 
 /**
  * ZK Fingerprint Handover Repository
- * Interacts with Zktime database on 192.168.50.6
+ * Interacts with dbo schema tables inside Zktime database on 192.168.50.6
  */
 
 const checkZkConnection = () => {
@@ -31,9 +31,11 @@ const getLatestCheckins = async (limit = 10) => {
           c.CHECKTIME AS checkTime,
           c.SENSORID AS sensorId,
           c.sn AS serialNumber,
-          COALESCE(u.NAME, N'مستخدم غير معروف') AS employeeName
-        FROM CHECKINOUT c
-        LEFT JOIN UserInfo u ON c.USERID = u.USERID
+          COALESCE(u.NAME, N'مستخدم غير معروف') AS employeeName,
+          d.DEPTNAME AS department
+        FROM dbo.CHECKINOUT c
+        LEFT JOIN dbo.USERINFO u ON c.USERID = u.USERID
+        LEFT JOIN dbo.DEPARTMENTS d ON u.DEFAULTDEPTID = d.DEPTID
         WHERE c.SENSORID = @sensorId OR c.sn = @sn
         ORDER BY c.CHECKTIME DESC
       `);
@@ -52,11 +54,17 @@ const getEmployeeDetails = async (userCode) => {
     const empResult = await pool.request()
       .input('userCode', sql.NVarChar(50), userCode)
       .query(`
-        SELECT USERID AS userId, BADGENUMBER AS userCode, NAME AS name
-        FROM UserInfo
-        WHERE BADGENUMBER = @userCode
+        SELECT 
+          u.USERID AS userId, 
+          u.BADGENUMBER AS userCode, 
+          u.NAME AS name, 
+          u.TITLE AS title, 
+          d.DEPTNAME AS department
+        FROM dbo.USERINFO u
+        LEFT JOIN dbo.DEPARTMENTS d ON u.DEFAULTDEPTID = d.DEPTID
+        WHERE u.BADGENUMBER = @userCode
       `);
-    
+
     const employee = empResult.recordset[0];
     if (!employee) return null;
 
@@ -74,18 +82,18 @@ const getEmployeeDetails = async (userCode) => {
           ui.AssignedDate AS assignedDate,
           COALESCE((
             SELECT COUNT(*)
-            FROM ItemTransactions t
+            FROM dbo.ItemTransactions t
             WHERE t.UserItemID = ui.UserItemID
               AND t.TransactionType = 'Handover'
           ), 0) AS handedOverQty,
           COALESCE((
             SELECT COUNT(*)
-            FROM ItemTransactions t
+            FROM dbo.ItemTransactions t
             WHERE t.UserItemID = ui.UserItemID
               AND t.TransactionType = 'Receive'
           ), 0) AS receivedQty
-        FROM UserItems ui
-        JOIN items i ON ui.ItemID = i.ItemID
+        FROM dbo.UserItems ui
+        JOIN dbo.Items i ON ui.ItemID = i.ItemID
         WHERE ui.UserID = @userId
       `);
 
@@ -101,9 +109,9 @@ const getEmployeeDetails = async (userCode) => {
           1 AS quantity,
           t.TransactionDate AS transactionDate,
           t.Notes AS notes
-        FROM ItemTransactions t
-        JOIN UserItems ui ON t.UserItemID = ui.UserItemID
-        JOIN items i ON ui.ItemID = i.ItemID
+        FROM dbo.ItemTransactions t
+        JOIN dbo.UserItems ui ON t.UserItemID = ui.UserItemID
+        JOIN dbo.Items i ON ui.ItemID = i.ItemID
         WHERE ui.UserID = @userId
         ORDER BY t.TransactionDate DESC
       `);
@@ -111,7 +119,9 @@ const getEmployeeDetails = async (userCode) => {
     return {
       employee: {
         userCode: employee.userCode,
-        name: employee.name
+        name: employee.name,
+        title: employee.title,
+        department: employee.department
       },
       custody: custodyResult.recordset.map(row => ({
         userItemId: row.userItemId,
@@ -139,7 +149,7 @@ const createHandoverReceiveTxn = async ({ userCode, itemCode, action, quantity =
     // 1. Find employee
     const empResult = await transaction.request()
       .input('userCode', sql.NVarChar(50), userCode)
-      .query(`SELECT USERID FROM UserInfo WHERE BADGENUMBER = @userCode`);
+      .query(`SELECT USERID FROM dbo.USERINFO WHERE BADGENUMBER = @userCode`);
     if (empResult.recordset.length === 0) {
       throw new AppError('الموظف المحدد غير موجود في قاعدة بيانات البصمة', 404, 'EMPLOYEE_NOT_FOUND');
     }
@@ -151,17 +161,17 @@ const createHandoverReceiveTxn = async ({ userCode, itemCode, action, quantity =
       .input('itemCode', sql.NVarChar(50), itemCode)
       .query(`
         SELECT TOP 1 ui.UserItemID 
-        FROM UserItems ui
-        JOIN items i ON ui.ItemID = i.ItemID
+        FROM dbo.UserItems ui
+        JOIN dbo.Items i ON ui.ItemID = i.ItemID
         WHERE ui.UserID = @userId AND (ui.ItemCode = @itemCode OR i.ItemName = @itemCode)
       `);
-    
+
     if (custodyResult.recordset.length === 0) {
       throw new AppError('هذا الصنف غير مخصص كعهدة لهذا الموظف في نظام البصمة', 404, 'CUSTODY_NOT_ASSIGNED');
     }
     const userItemId = custodyResult.recordset[0].UserItemID;
 
-    // 3. Insert transaction(s) - run a loop to handle quantity > 1 since each transaction row is 1 piece
+    // 3. Insert transaction(s)
     let lastTxnId = null;
     for (let i = 0; i < quantity; i++) {
       const result = await transaction.request()
@@ -170,7 +180,7 @@ const createHandoverReceiveTxn = async ({ userCode, itemCode, action, quantity =
         .input('createdBy', sql.NVarChar(100), createdBy)
         .input('notes', sql.NVarChar(500), notes)
         .query(`
-          INSERT INTO ItemTransactions (UserItemID, TransactionType, TransactionDate, HandledBy, Notes)
+          INSERT INTO dbo.ItemTransactions (UserItemID, TransactionType, TransactionDate, HandledBy, Notes)
           OUTPUT INSERTED.TransactionID AS txnId
           VALUES (@userItemId, @action, GETDATE(), @createdBy, @notes)
         `);
@@ -194,7 +204,7 @@ const getDashboardStats = async () => {
       SELECT
         COALESCE(SUM(CASE WHEN TransactionType = 'Handover' THEN 1 ELSE 0 END), 0) AS totalHandovers,
         COALESCE(SUM(CASE WHEN TransactionType = 'Receive' THEN 1 ELSE 0 END), 0) AS totalReceives
-      FROM ItemTransactions
+      FROM dbo.ItemTransactions
     `);
 
     const { totalHandovers, totalReceives } = statsResult.recordset[0];
@@ -226,17 +236,85 @@ const getRecentDashboardTxns = async (limit = 10) => {
           i.ItemName AS itemName,
           t.TransactionType AS action,
           1 AS quantity,
-          t.TransactionDate AS transactionDate
-        FROM ItemTransactions t
-        JOIN UserItems ui ON t.UserItemID = ui.UserItemID
-        LEFT JOIN UserInfo u ON ui.UserID = u.USERID
-        JOIN items i ON ui.ItemID = i.ItemID
+          t.TransactionDate AS transactionDate,
+          t.HandledBy AS handledBy,
+          t.Notes AS notes
+        FROM dbo.ItemTransactions t
+        JOIN dbo.UserItems ui ON t.UserItemID = ui.UserItemID
+        LEFT JOIN dbo.USERINFO u ON ui.UserID = u.USERID
+        JOIN dbo.Items i ON ui.ItemID = i.ItemID
         ORDER BY t.TransactionDate DESC
       `);
     return result.recordset;
   } catch (err) {
     if (err instanceof AppError) throw err;
     throw new DatabaseError(`فشل في جلب أحدث العمليات: ${err.message}`);
+  }
+};
+
+const getTransactionHistory = async ({ limit = 100, action, search } = {}) => {
+  try {
+    const pool = checkZkConnection();
+    let query = `
+      SELECT TOP (@limit)
+        t.TransactionID AS txnId,
+        u.BADGENUMBER AS userCode,
+        COALESCE(u.NAME, N'مستخدم غير معروف') AS employeeName,
+        ui.ItemCode AS itemCode,
+        i.ItemName AS itemName,
+        t.TransactionType AS action,
+        1 AS quantity,
+        t.TransactionDate AS transactionDate,
+        t.HandledBy AS handledBy,
+        t.Notes AS notes
+      FROM dbo.ItemTransactions t
+      JOIN dbo.UserItems ui ON t.UserItemID = ui.UserItemID
+      LEFT JOIN dbo.USERINFO u ON ui.UserID = u.USERID
+      JOIN dbo.Items i ON ui.ItemID = i.ItemID
+      WHERE 1=1
+    `;
+    const request = pool.request().input('limit', sql.Int, limit);
+    if (action && action !== 'all') {
+      query += ` AND t.TransactionType = @action`;
+      request.input('action', sql.NVarChar(20), action);
+    }
+    if (search && search.trim()) {
+      query += ` AND (u.BADGENUMBER LIKE '%' + @search + '%' OR u.NAME LIKE '%' + @search + '%' OR i.ItemName LIKE '%' + @search + '%')`;
+      request.input('search', sql.NVarChar(100), search.trim());
+    }
+    query += ` ORDER BY t.TransactionDate DESC`;
+    const result = await request.query(query);
+    return result.recordset;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError(`فشل في جلب سجل المعاملات: ${err.message}`);
+  }
+};
+
+const searchEmployees = async (search = '', limit = 1000) => {
+  try {
+    const pool = checkZkConnection();
+    let query = `
+      SELECT TOP (${Number(limit) || 1000}) 
+        u.USERID AS userId, 
+        u.BADGENUMBER AS userCode, 
+        u.NAME AS name, 
+        u.TITLE AS title, 
+        d.DEPTNAME AS department
+      FROM dbo.USERINFO u
+      LEFT JOIN dbo.DEPARTMENTS d ON u.DEFAULTDEPTID = d.DEPTID
+    `;
+    const request = pool.request();
+    if (search && search.trim()) {
+      query += ` WHERE u.BADGENUMBER LIKE '%' + @search + '%' OR u.NAME LIKE '%' + @search + '%'`;
+      request.input('search', sql.NVarChar(100), search.trim());
+    }
+    query += ` ORDER BY TRY_CAST(u.BADGENUMBER AS INT) ASC, u.BADGENUMBER ASC`;
+    const result = await request.query(query);
+    return result.recordset;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError(`فشل في البحث عن الموظفين: ${err.message}`);
   }
 };
 
@@ -251,7 +329,7 @@ const getDashboardChartData = async (days = 7) => {
           CAST(TransactionDate AS DATE) AS txnDate,
           TransactionType AS action,
           COUNT(*) AS totalQty
-        FROM ItemTransactions
+        FROM dbo.ItemTransactions
         WHERE TransactionDate >= DATEADD(day, -@days, GETDATE())
         GROUP BY CAST(TransactionDate AS DATE), TransactionType
         ORDER BY txnDate ASC
@@ -265,7 +343,7 @@ const getDashboardChartData = async (days = 7) => {
 
 const getZkDashboardSummaryToday = async () => {
   try {
-    const pool = getZkDB(); // Direct get to handle fallback/unavailability gracefully
+    const pool = getZkDB();
     if (!pool) {
       return {
         activeEmployeesToday: 0,
@@ -274,14 +352,14 @@ const getZkDashboardSummaryToday = async () => {
         error: 'قاعدة بيانات البصمة غير متصلة'
       };
     }
-    
+
     // 1. Active employees today (checked in on laundry device)
     const activeEmployeesResult = await pool.request()
       .input('sensorId', sql.NVarChar(50), config.zkDb.laundrySensorId)
       .input('sn', sql.NVarChar(50), config.zkDb.laundrySn)
       .query(`
         SELECT COUNT(DISTINCT USERID) AS activeEmployeesToday
-        FROM CHECKINOUT
+        FROM dbo.CHECKINOUT
         WHERE CAST(CHECKTIME AS DATE) = CAST(GETDATE() AS DATE)
           AND (SENSORID = @sensorId OR sn = @sn)
       `);
@@ -291,7 +369,7 @@ const getZkDashboardSummaryToday = async () => {
       SELECT 
           COALESCE(SUM(CASE WHEN TransactionType = 'Handover' THEN 1 ELSE 0 END), 0) AS uniformsHandedOverToday,
           COALESCE(SUM(CASE WHEN TransactionType = 'Receive' THEN 1 ELSE 0 END), 0) AS uniformsReceivedToday
-      FROM ItemTransactions
+      FROM dbo.ItemTransactions
       WHERE CAST(TransactionDate AS DATE) = CAST(GETDATE() AS DATE)
     `);
 
@@ -310,6 +388,23 @@ const getZkDashboardSummaryToday = async () => {
   }
 };
 
+// Get all available uniform items
+const getAllItems = async () => {
+  try {
+    const pool = checkZkConnection();
+    const result = await pool.request().query(`
+      SELECT ItemID AS itemId, ItemName AS itemName, ItemDescription AS itemDescription
+      FROM dbo.Items
+      WHERE IsActive = 1
+      ORDER BY ItemName
+    `);
+    return result.recordset;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError(`فشل في جلب قائمة الأصناف: ${err.message}`);
+  }
+};
+
 module.exports = {
   getLatestCheckins,
   getEmployeeDetails,
@@ -317,5 +412,8 @@ module.exports = {
   getDashboardStats,
   getRecentDashboardTxns,
   getDashboardChartData,
-  getZkDashboardSummaryToday
+  getTransactionHistory,
+  searchEmployees,
+  getZkDashboardSummaryToday,
+  getAllItems
 };

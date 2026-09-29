@@ -14,25 +14,41 @@ const permissionsCache = require('../services/permissions.cache');
  * Level 0 — staff             — موظف مستودع    — Own node quick consume only
  */
 const ROLE_HIERARCHY = {
-  staff:             0,
-  accountant:        1,
-  warehouse_head:    2,
-  warehouse_manager: 3,
-  manager:           4,
-  admin:             5,
+  staff:              0,
+  laundry_operator:   1,
+  uniform_clerk:      1,
+  laundry_cashier:    1,
+  accountant:         1,
+  warehouse_head:     2,
+  laundry_supervisor: 3,
+  warehouse_manager:  3,
+  manager:            4,
+  admin:              5,
 };
 
 /** Roles that are scoped to a specific warehouse node */
-const WAREHOUSE_ROLES = ['warehouse_manager', 'warehouse_head', 'staff'];
+const WAREHOUSE_ROLES = [
+  'warehouse_manager',
+  'warehouse_head',
+  'staff',
+  'laundry_supervisor',
+  'laundry_cashier',
+  'uniform_clerk',
+  'laundry_operator',
+];
 
 /** Arabic display labels per role */
 const ROLE_LABELS_AR = {
-  admin:             'مدير النظام',
-  manager:           'مدير عام',
-  warehouse_manager: 'مدير مستودع',
-  warehouse_head:    'رئيس عهدة',
-  accountant:        'محاسب',
-  staff:             'موظف مستودع',
+  admin:              'مدير النظام',
+  manager:            'مدير عام',
+  warehouse_manager:  'مدير مستودع',
+  warehouse_head:     'رئيس عهدة',
+  accountant:         'محاسب',
+  staff:              'موظف مستودع',
+  laundry_supervisor: 'مشرف المغسلة',
+  laundry_cashier:    'كاشير المغسلة',
+  uniform_clerk:      'مسؤول عهد اليونيفورم',
+  laundry_operator:   'مشغل مغسلة',
 };
 
 /**

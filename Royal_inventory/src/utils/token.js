@@ -84,16 +84,14 @@ const isTokenBlacklisted = (jti) => {
  * @param {Object} user - { id, role, nodeId, fullNameAr }
  */
 const issueTokenPair = (user) => {
-  const accessToken  = signAccessToken({
+  const accessToken = signAccessToken({
     sub:        user.id,
     role:       user.role,
     nodeId:     user.nodeId,
     fullNameAr: user.fullNameAr,
   });
 
-  const refreshToken = signRefreshToken(user.id);
-
-  return { accessToken, refreshToken };
+  return { accessToken, refreshToken: null };
 };
 
 // ── Decode without verify (for logging/debugging only) ───────────────────────

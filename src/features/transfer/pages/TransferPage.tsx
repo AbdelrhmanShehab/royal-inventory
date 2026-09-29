@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
   ClipboardList, 
   Plus, 
@@ -12,7 +12,14 @@ import {
   Truck,
   Inbox,
   Send,
-  Sparkles
+  Sparkles,
+  Download,
+  Filter,
+  RotateCcw,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  FileEdit
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import Button from '../../../components/ui/Button';
@@ -24,6 +31,7 @@ import CreateTransferDialog from '../dialogs/CreateTransferDialog';
 import TransferDetailsDialog from '../dialogs/TransferDetailsDialog';
 import LaundryReturnsTab from '../components/LaundryReturnsTab';
 import { laundryApi } from '../../../api/laundry.api';
+import { warehousesApi } from '../../../api/warehouses.api';
 import { TRANSFER_PERMISSIONS } from '../constants/transfer.constants';
 import { useWarehouseScope } from '../../../hooks/useWarehouseScope';
 
@@ -47,6 +55,9 @@ export default function TransferPage({ defaultTab = 'all' }: TransferPageProps) 
   // Filters
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [filterTxnType, setFilterTxnType] = useState<string>('');
+  const [filterFromNodeId, setFilterFromNodeId] = useState<number | ''>('');
+  const [filterToNodeId, setFilterToNodeId] = useState<number | ''>('');
+  const [filterWarehouseNodeId, setFilterWarehouseNodeId] = useState<number | ''>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Notifications
@@ -60,6 +71,30 @@ export default function TransferPage({ defaultTab = 'all' }: TransferPageProps) 
   // React Query hook using node-scoped transferKeys
   const { data: transfers = [], isLoading, isError, error, refetch } = useTransfersList();
 
+  // Load all warehouses list for warehouse filtering
+  const { data: warehouseData } = useQuery({
+    queryKey: ['all-operational-warehouses'],
+    queryFn: () => warehousesApi.getOperationalWarehouses(true),
+    staleTime: 5 * 60 * 1000
+  });
+
+  const allWarehouses = useMemo(() => {
+    const map = new Map<number, string>();
+    (warehouseData?.allWarehouses || []).forEach(w => {
+      if (w.nodeId) map.set(Number(w.nodeId), w.name);
+    });
+    (warehouseData?.parentEntities || []).forEach(p => {
+      if (p.nodeId) map.set(Number(p.nodeId), p.name);
+    });
+    transfers.forEach(t => {
+      if (t.fromNodeId && t.fromNodeNameAr) map.set(Number(t.fromNodeId), t.fromNodeNameAr);
+      if (t.toNodeId && t.toNodeNameAr) map.set(Number(t.toNodeId), t.toNodeNameAr);
+    });
+    return Array.from(map.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+  }, [warehouseData, transfers]);
+
   // Tab Filtering & Client side searching
   const filteredTransfers = transfers.filter(item => {
     // 1. Tab filtering
@@ -70,24 +105,56 @@ export default function TransferPage({ defaultTab = 'all' }: TransferPageProps) 
       if (Number(item.fromNodeId) !== currentNodeId) return false;
     }
 
-    // 2. Status & TxnType filtering
+    // 2. Status & Flow filtering
     const matchesStatus = filterStatus === 'pending_or_draft'
       ? (item.status === 'pending_approval' || item.status === 'draft')
       : (filterStatus ? item.status === filterStatus : true);
+    
+    // 3. TxnType filtering
     const matchesTxnType = filterTxnType 
       ? (filterTxnType === 'laundry' ? (item.txnType === 'laundry' || Number(item.toNodeId) === 29) : item.txnType === filterTxnType)
       : true;
+
+    // 4. Warehouse Filters
+    const matchesFromNode = filterFromNodeId ? Number(item.fromNodeId) === Number(filterFromNodeId) : true;
+    const matchesToNode = filterToNodeId ? Number(item.toNodeId) === Number(filterToNodeId) : true;
+    const matchesAnyNode = filterWarehouseNodeId 
+      ? (Number(item.fromNodeId) === Number(filterWarehouseNodeId) || Number(item.toNodeId) === Number(filterWarehouseNodeId))
+      : true;
     
     const query = searchQuery.toLowerCase().trim();
-    if (!query) return matchesStatus && matchesTxnType;
+    if (!query) {
+      return matchesStatus && matchesTxnType && matchesFromNode && matchesToNode && matchesAnyNode;
+    }
 
     const idMatch = item.id.toString().includes(query);
     const fromMatch = (item.fromNodeNameAr || '').toLowerCase().includes(query);
     const toMatch = (item.toNodeNameAr || '').toLowerCase().includes(query);
-    const creatorMatch = (item.createdByNameAr || item.createdBy || '').toString().toLowerCase().includes(query);
+    const creatorMatch = (item.createdByNameAr || item.creatorUsername || item.createdBy || '').toString().toLowerCase().includes(query);
+    const confirmerMatch = (item.confirmerNameAr || item.confirmerUsername || '').toString().toLowerCase().includes(query);
 
-    return matchesStatus && matchesTxnType && (idMatch || fromMatch || toMatch || creatorMatch);
+    return matchesStatus && matchesTxnType && matchesFromNode && matchesToNode && matchesAnyNode && 
+      (idMatch || fromMatch || toMatch || creatorMatch || confirmerMatch);
   }).sort((a, b) => Number(b.id) - Number(a.id));
+
+  // Count active filters
+  const activeFiltersCount = [
+    filterStatus,
+    filterTxnType,
+    filterFromNodeId,
+    filterToNodeId,
+    filterWarehouseNodeId,
+    searchQuery
+  ].filter(Boolean).length;
+
+  const resetAllFilters = () => {
+    setFilterStatus('');
+    setFilterTxnType('');
+    setFilterFromNodeId('');
+    setFilterToNodeId('');
+    setFilterWarehouseNodeId('');
+    setSearchQuery('');
+  };
 
   // Query laundry returns and active transfers for live laundry counts
   const { data: laundryReturns = [] } = useQuery({
@@ -102,6 +169,22 @@ export default function TransferPage({ defaultTab = 'all' }: TransferPageProps) 
   const outgoingApprovedCount = transfers.filter(t => (isGlobalAdmin || Number(t.fromNodeId) === currentNodeId) && t.status === 'approved').length;
   const shippedInTransitCount = transfers.filter(t => (isGlobalAdmin || Number(t.toNodeId) === currentNodeId || Number(t.fromNodeId) === currentNodeId) && t.status === 'shipped').length;
 
+  // Export CSV
+  const handleExportCSV = () => {
+    const headers = ['رقم الحركة,نوع الحركة,مستودع المصدر,مستودع الوجهة,المنشئ,التاريخ,عدد الأصناف,الحالة\n'];
+    const rows = filteredTransfers.map(t =>
+      `#${t.id},${t.txnType},${t.fromNodeNameAr || t.fromNodeId},${t.toNodeNameAr || t.toNodeId || '—'},${t.createdByNameAr || t.createdBy},${t.createdAt || ''},${t.itemCount},${t.status}`
+    );
+    const blob = new Blob(['\uFEFF' + headers.concat(rows.join('\n'))], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `حركات_وتحويلات_المخزون_${new Date().toISOString().substring(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="flex flex-col gap-6 font-arabic select-none" dir="rtl">
       
@@ -111,13 +194,22 @@ export default function TransferPage({ defaultTab = 'all' }: TransferPageProps) 
           <div>
             <h1 className="text-lg font-bold text-slate-800 flex items-center gap-2">
               <ClipboardList size={20} className="text-blue-600 animate-pulse" />
-              إدارة حركات المخزون وطلبات التحويل (COMSYS Enterprise ERP)
+              إدارة الحركات والتحويلات المخزنية (COMSYS Enterprise ERP)
             </h1>
             <p className="text-xs text-slate-400 mt-1">
-              مسار تبادلي بين المستودعات (2-Party Transfer Workflow) — {currentNodeName}
+              مسار تبادلي بين المستودعات ومتابعة سجل العمليات التشغيلية المعتمدة — {currentNodeName}
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportCSV}
+              className="gap-1.5 text-xs font-bold text-slate-700 hover:text-slate-900 border-slate-200"
+            >
+              <Download size={14} />
+              تصدير السجل (CSV)
+            </Button>
             <PermissionGate permission={TRANSFER_PERMISSIONS.CREATE_DRAFT}>
               <Button 
                 variant="primary" 
@@ -346,38 +438,197 @@ export default function TransferPage({ defaultTab = 'all' }: TransferPageProps) 
           </button>
         </div>
 
-        {/* Search & Filters Grid (Only shown when not in laundry tab) */}
+        {/* Flow Lifecycle Stage Pipeline (فلتر مسار الاعتماد والتدفق) */}
         {activeTab !== 'laundry' && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1.5">
+                <Filter size={13} className="text-blue-600" />
+                تصفية سريعة بمحطة مسار الحركة والاعتماد (Flow Pipeline):
+              </span>
+              {activeFiltersCount > 0 && (
+                <button
+                  onClick={resetAllFilters}
+                  className="text-[11px] text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 cursor-pointer bg-blue-50 px-2 py-0.5 rounded-lg border border-blue-200 transition-colors"
+                >
+                  <RotateCcw size={11} />
+                  إعادة ضبط الفلاتر ({activeFiltersCount} نشط)
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+              
+              {/* All */}
+              <button
+                onClick={() => setFilterStatus('')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 border whitespace-nowrap ${
+                  filterStatus === ''
+                    ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <span>جميع المراحل</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-black ${filterStatus === '' ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                  {transfers.length}
+                </span>
+              </button>
+
+              {/* Draft */}
+              <button
+                onClick={() => setFilterStatus(filterStatus === 'draft' ? '' : 'draft')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 border whitespace-nowrap ${
+                  filterStatus === 'draft'
+                    ? 'bg-slate-700 text-white border-slate-700 shadow-xs ring-2 ring-slate-400/40'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <FileEdit size={13} className="text-slate-400" />
+                <span>1. مسودة (Draft)</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-black ${filterStatus === 'draft' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                  {transfers.filter(t => t.status === 'draft').length}
+                </span>
+              </button>
+
+              {/* Pending Approval */}
+              <button
+                onClick={() => setFilterStatus(filterStatus === 'pending_approval' ? '' : 'pending_approval')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 border whitespace-nowrap ${
+                  filterStatus === 'pending_approval'
+                    ? 'bg-amber-600 text-white border-amber-600 shadow-xs ring-2 ring-amber-400/50'
+                    : 'bg-amber-50/60 text-amber-900 border-amber-200/80 hover:bg-amber-100/60'
+                }`}
+              >
+                <Clock size={13} className={filterStatus === 'pending_approval' ? 'text-white' : 'text-amber-600'} />
+                <span>2. بانتظار الاعتماد</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-black ${filterStatus === 'pending_approval' ? 'bg-amber-800 text-white' : 'bg-amber-100 text-amber-800'}`}>
+                  {transfers.filter(t => t.status === 'pending_approval').length}
+                </span>
+              </button>
+
+              {/* Approved */}
+              <button
+                onClick={() => setFilterStatus(filterStatus === 'approved' ? '' : 'approved')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 border whitespace-nowrap ${
+                  filterStatus === 'approved'
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-xs ring-2 ring-blue-400/50'
+                    : 'bg-blue-50/60 text-blue-900 border-blue-200/80 hover:bg-blue-100/60'
+                }`}
+              >
+                <CheckCircle2 size={13} className={filterStatus === 'approved' ? 'text-white' : 'text-blue-600'} />
+                <span>3. معتمد للشحن</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-black ${filterStatus === 'approved' ? 'bg-blue-800 text-white' : 'bg-blue-100 text-blue-800'}`}>
+                  {transfers.filter(t => t.status === 'approved').length}
+                </span>
+              </button>
+
+              {/* Shipped */}
+              <button
+                onClick={() => setFilterStatus(filterStatus === 'shipped' ? '' : 'shipped')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 border whitespace-nowrap ${
+                  filterStatus === 'shipped'
+                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs ring-2 ring-indigo-400/50'
+                    : 'bg-indigo-50/60 text-indigo-900 border-indigo-200/80 hover:bg-indigo-100/60'
+                }`}
+              >
+                <Truck size={13} className={filterStatus === 'shipped' ? 'text-white' : 'text-indigo-600'} />
+                <span>4. قيد التوصيل (مشحون)</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-black ${filterStatus === 'shipped' ? 'bg-indigo-800 text-white' : 'bg-indigo-100 text-indigo-800'}`}>
+                  {transfers.filter(t => t.status === 'shipped').length}
+                </span>
+              </button>
+
+              {/* Confirmed / Completed */}
+              <button
+                onClick={() => setFilterStatus(filterStatus === 'confirmed' ? '' : 'confirmed')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 border whitespace-nowrap ${
+                  filterStatus === 'confirmed'
+                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs ring-2 ring-emerald-400/50'
+                    : 'bg-emerald-50/60 text-emerald-900 border-emerald-200/80 hover:bg-emerald-100/60'
+                }`}
+              >
+                <PackageCheck size={13} className={filterStatus === 'confirmed' ? 'text-white' : 'text-emerald-600'} />
+                <span>5. مكتمل ومستلم</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-black ${filterStatus === 'confirmed' ? 'bg-emerald-800 text-white' : 'bg-emerald-100 text-emerald-800'}`}>
+                  {transfers.filter(t => t.status === 'confirmed').length}
+                </span>
+              </button>
+
+              {/* Cancelled */}
+              <button
+                onClick={() => setFilterStatus(filterStatus === 'cancelled' ? '' : 'cancelled')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 border whitespace-nowrap ${
+                  filterStatus === 'cancelled'
+                    ? 'bg-red-600 text-white border-red-600 shadow-xs ring-2 ring-red-400/50'
+                    : 'bg-red-50/60 text-red-900 border-red-200/80 hover:bg-red-100/60'
+                }`}
+              >
+                <XCircle size={13} className={filterStatus === 'cancelled' ? 'text-white' : 'text-red-600'} />
+                <span>ملغي / مرفوض</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-black ${filterStatus === 'cancelled' ? 'bg-red-800 text-white' : 'bg-red-100 text-red-800'}`}>
+                  {transfers.filter(t => t.status === 'cancelled').length}
+                </span>
+              </button>
+
+            </div>
+          </div>
+        )}
+
+        {/* Detailed Filters & Search Row (Only shown when not in laundry tab) */}
+        {activeTab !== 'laundry' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 pt-3 border-t border-slate-100">
             
             {/* Search Input */}
-            <div className="relative flex items-center">
-              <Search size={16} className="absolute right-3 text-slate-400 pointer-events-none" />
+            <div className="relative flex items-center lg:col-span-2">
+              <Search size={15} className="absolute right-3 text-slate-400 pointer-events-none" />
               <input 
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="ابحث برقم المستند، المستودع، أو المنشئ..."
+                placeholder="ابحث برقم المستند، الصنف، المنشئ، أو المستودع..."
                 className="w-full pr-9 pl-3 py-2 bg-slate-50 border border-slate-200 text-xs rounded-xl placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-semibold"
               />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery('')} className="absolute left-2.5 text-slate-400 hover:text-slate-600 cursor-pointer">
+                  <X size={14} />
+                </button>
+              )}
             </div>
 
-            {/* Status Filter */}
+            {/* From Warehouse Filter */}
             <div className="flex flex-col gap-1">
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 text-xs rounded-xl text-slate-700 font-semibold focus:outline-none focus:border-blue-500"
-              >
-                <option value="">جميع حالات المستندات</option>
-                <option value="pending_or_draft">بانتظار الاعتماد والمسودات (Pending / Draft)</option>
-                <option value="draft">مسودة (Draft)</option>
-                <option value="pending_approval">بانتظار الاعتماد (Pending Approval)</option>
-                <option value="approved">معتمد (Approved)</option>
-                <option value="shipped">مشحون وفي الطريق (Shipped)</option>
-                <option value="confirmed">مكتمل ومستلم (Confirmed)</option>
-                <option value="cancelled">ملغي/مرفوض (Cancelled)</option>
-              </select>
+              <div className="relative">
+                <select
+                  value={filterFromNodeId}
+                  onChange={(e) => setFilterFromNodeId(e.target.value ? Number(e.target.value) : '')}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 text-xs rounded-xl text-slate-700 font-semibold focus:outline-none focus:border-blue-500 cursor-pointer"
+                >
+                  <option value="">من مستودع المصدر: (الكل)</option>
+                  {allWarehouses.map(w => (
+                    <option key={`from-${w.id}`} value={w.id}>
+                      من: {w.name} (#{w.id})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* To Warehouse Filter */}
+            <div className="flex flex-col gap-1">
+              <div className="relative">
+                <select
+                  value={filterToNodeId}
+                  onChange={(e) => setFilterToNodeId(e.target.value ? Number(e.target.value) : '')}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 text-xs rounded-xl text-slate-700 font-semibold focus:outline-none focus:border-blue-500 cursor-pointer"
+                >
+                  <option value="">إلى مستودع الوجهة: (الكل)</option>
+                  {allWarehouses.map(w => (
+                    <option key={`to-${w.id}`} value={w.id}>
+                      إلى: {w.name} (#{w.id})
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {/* Txn Type Filter */}
@@ -385,7 +636,7 @@ export default function TransferPage({ defaultTab = 'all' }: TransferPageProps) 
               <select
                 value={filterTxnType}
                 onChange={(e) => setFilterTxnType(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 text-xs rounded-xl text-slate-700 font-semibold focus:outline-none focus:border-blue-500"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 text-xs rounded-xl text-slate-700 font-semibold focus:outline-none focus:border-blue-500 cursor-pointer"
               >
                 <option value="">جميع أنواع الحركات</option>
                 <option value="internal_transfer">تحويل بين مستودعات</option>

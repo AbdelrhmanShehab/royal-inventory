@@ -87,7 +87,7 @@ const login = async (username, password) => {
       nodeIds:    user.nodeIds,
       permissions,
     },
-    ...tokens,
+    accessToken: tokens.accessToken,
   };
 };
 

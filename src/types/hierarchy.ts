@@ -17,6 +17,7 @@ export interface OrganizationNode {
   type:
     | 'group'
     | 'hotel'
+    | 'laundry'
     | 'kitchen'
     | 'bar'
     | 'restaurant'
@@ -28,6 +29,7 @@ export interface OrganizationNode {
   status: 'active' | 'inactive';
 
   parentId?: string | null;
+  groupId?: number;
   children?: OrganizationNode[];
 
   stats?: {

@@ -15,15 +15,6 @@ const login = asyncHandler(async (req, res) => {
   const { username, password } = req.body;
   const result = await service.login(username, password);
 
-  // Store refresh token in httpOnly cookie
-  res.cookie('refreshToken', result.refreshToken, {
-    httpOnly: true,
-    secure:   config.isProd,
-    sameSite: 'strict',
-    maxAge:   7 * 24 * 60 * 60 * 1000, // 7 days in ms
-    path:     '/api/v1/auth/refresh',
-  });
-
   return R.success(res, {
     user:        result.user,
     accessToken: result.accessToken,
@@ -32,25 +23,7 @@ const login = asyncHandler(async (req, res) => {
 
 // POST /api/v1/auth/refresh
 const refresh = asyncHandler(async (req, res) => {
-  // Accept from cookie OR body (for non-browser clients)
-  const refreshToken = req.cookies?.refreshToken ?? req.body?.refreshToken;
-
-  if (!refreshToken) {
-    return R.unauthorized(res, 'رمز التجديد مفقود', 'REFRESH_TOKEN_MISSING');
-  }
-
-  const tokens = await service.refreshTokens(refreshToken);
-
-  // Rotate refresh token cookie
-  res.cookie('refreshToken', tokens.refreshToken, {
-    httpOnly: true,
-    secure:   config.isProd,
-    sameSite: 'strict',
-    maxAge:   7 * 24 * 60 * 60 * 1000,
-    path:     '/api/v1/auth/refresh',
-  });
-
-  return R.success(res, { accessToken: tokens.accessToken }, 'تم تجديد الجلسة بنجاح');
+  return R.badRequest(res, 'تم إلغاء ميزة رمز التجديد — صلاحية رمز الدخول الحالي 7 أيام', 'REFRESH_TOKEN_DISABLED');
 });
 
 // POST /api/v1/auth/logout

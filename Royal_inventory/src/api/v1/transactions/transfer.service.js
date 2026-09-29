@@ -3,6 +3,7 @@
 const transferRepo = require('../../../repositories/system/transfer.repo');
 const stockRepo = require('../../../repositories/system/stock.repo');
 const hierarchyRepo = require('../../../repositories/system/hierarchy.repo');
+const laundryRepo = require('../../../repositories/system/laundry.repo');
 const { getSystemDB } = require('../../../config/database');
 const { NotFoundError, BadRequestError, DatabaseError } = require('../../../utils/errors');
 const sql = require('mssql');
@@ -92,7 +93,7 @@ const submitForApproval = async (txnId, userId) => {
     throw new BadRequestError('يمكن فقط إرسال المعاملات في حالة مسودة (Draft)');
   }
 
-  const isTransferOrReturn = transfer.txnType === 'internal_transfer' || transfer.txnType === 'return';
+  const isTransferOrReturn = transfer.txnType === 'internal_transfer' || transfer.txnType === 'return' || transfer.txnType === 'laundry' || Boolean(transfer.toNodeId);
   if (!isTransferOrReturn) {
     throw new BadRequestError('طلبات الاستهلاك والتخريد لا تتطلب موافقة متعددة الخطوات، يمكنك تأكيدها مباشرة');
   }
@@ -153,12 +154,44 @@ const dispatchTransfer = async (txnId, userId) => {
   try {
     await transaction.begin();
 
+    const isLaundry = transfer.txnType === 'laundry' || Number(transfer.toNodeId) === 29;
+
     // 2. Deduct stock from source warehouse
     for (const line of transfer.lines) {
       const field = transfer.txnType === 'return' ? 'qty_returned_out'
-        : transfer.txnType === 'laundry' ? 'qty_laundry'
+        : isLaundry ? 'qty_laundry'
         : 'qty_transferred_out';
       await stockRepo.adjustStock(transfer.fromNodeId, line.itemCode, field, line.quantity, transaction);
+    }
+
+    // 2.1 If shipping to laundry, create the laundry transfer record & sync reconciliation
+    if (isLaundry) {
+      const laundryTransferId = await laundryRepo.createTransfer({
+        fromWarehouseId: transfer.fromNodeId,
+        status: 'sent',
+        notes: transfer.notes || `تحويل إلى المغسلة - مستند رقم #${txnId}`,
+        createdBy: userId,
+      }, transaction);
+
+      for (const line of transfer.lines) {
+        await laundryRepo.createTransferItem({
+          transferId: laundryTransferId,
+          itemCode: line.itemCode,
+          itemNameAr: line.itemNameAr || null,
+          sentQty: line.quantity,
+          receivedQty: 0,
+          remainingQty: line.quantity,
+          unitCode: line.unitCode || null,
+          unitCost: line.unitCost || 0,
+        }, transaction);
+
+        await laundryRepo.upsertReconciliation({
+          itemCode: line.itemCode,
+          itemNameAr: line.itemNameAr || null,
+          sentQty: line.quantity,
+          inProgressQty: line.quantity,
+        }, transaction);
+      }
     }
 
     // 3. Update status to shipped (in transit)
@@ -230,9 +263,10 @@ const cancelTransfer = async (txnId, userId) => {
 
     // If already shipped, we must reverse the deducted stock back to the source warehouse
     if (transfer.status === 'shipped') {
+      const isLaundry = transfer.txnType === 'laundry' || Number(transfer.toNodeId) === 29;
       for (const line of transfer.lines) {
         const field = transfer.txnType === 'return' ? 'qty_returned_out'
-          : transfer.txnType === 'laundry' ? 'qty_laundry'
+          : isLaundry ? 'qty_laundry'
           : 'qty_transferred_out';
         await stockRepo.adjustStock(transfer.fromNodeId, line.itemCode, field, -line.quantity, transaction);
       }
@@ -256,9 +290,9 @@ const confirmTransfer = async (txnId, userId) => {
   const transfer = await transferRepo.getTransferById(txnId);
   if (!transfer) throw new NotFoundError('طلب الحركة غير موجود');
 
-  const isTransferOrReturn = transfer.txnType === 'internal_transfer' || transfer.txnType === 'return';
+  const isTransferOrReturn = transfer.txnType === 'internal_transfer' || transfer.txnType === 'return' || transfer.txnType === 'laundry' || Boolean(transfer.toNodeId);
   if (isTransferOrReturn) {
-    throw new BadRequestError('التحويلات الداخلية والمرتجعات يجب أن تمر عبر تدفق الاعتماد والشحن والاستلام الكامل');
+    throw new BadRequestError('التحويلات وحركات النقل يجب أن تمر عبر تدفق الاعتماد والشحن والاستلام الكامل');
   }
 
   if (transfer.status !== 'draft') {

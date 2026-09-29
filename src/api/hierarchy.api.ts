@@ -59,8 +59,12 @@ export const transformNode = (node: any): OrganizationNode => {
   const managerName = node.managerName || node.manager_name || '—';
   const isActive = node.isActive !== undefined ? node.isActive : (node.is_active !== undefined ? node.is_active : true);
 
-  if (nodeType === 'parent') {
-    mappedType = parentNodeId === null ? 'hotel' : 'hotel';
+  if (nodeNameAr.includes('مغسل') || node.hasLaundryAccess) {
+    mappedType = 'laundry';
+  } else if (nodeType === 'parent') {
+    mappedType = 'hotel';
+  } else if (nodeNameAr.includes('دور') || nodeNameAr.includes('الدور') || nodeNameAr.includes('اسكان') || nodeNameAr.includes('إسكان')) {
+    mappedType = 'housing';
   } else {
     mappedType = division === 'fb' ? 'kitchen' : 'warehouse';
   }
@@ -74,10 +78,11 @@ export const transformNode = (node: any): OrganizationNode => {
     manager: managerName,
     status: isActive ? 'active' : 'inactive',
     parentId: parentNodeId ? String(parentNodeId) : null,
+    groupId: Number(node.groupId || node.group_id || 0) || undefined,
     children: children,
     stats: {
       operationalInventory: Number(node.totalStock || node.total_stock || 0),
-      itemCount: children.length,
+      itemCount: Number(node.itemCount !== undefined ? node.itemCount : (node.item_count !== undefined ? node.item_count : 0)),
       transfersCount: 0,
       lastMovement: '—'
     }
@@ -143,6 +148,9 @@ export const transformStockItem = (item: any): StockItem => {
   const resolvedUnit = item.unitNameAr || item.unit || cached?.unitNameAr || 'وحدة';
 
   return {
+    nodeId: Number(item.nodeId || item.node_id || 0),
+    node_id: Number(item.nodeId || item.node_id || 0),
+    nodeNameAr: item.nodeNameAr || item.node_name_ar || '',
     item_code: code,
     item_name_ar: resolvedName,
     item_name_en: item.item_name_en || '',

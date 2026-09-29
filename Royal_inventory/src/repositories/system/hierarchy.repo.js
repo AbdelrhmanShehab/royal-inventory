@@ -155,11 +155,12 @@ const getAllNodes = async (groupId = null) => {
         parent_node_id AS parentNodeId, node_name_ar AS nodeNameAr, node_type AS nodeType, 
         manager_name AS managerName, is_active AS isActive, division, has_laundry_access AS hasLaundryAccess
       FROM ops.inventory_nodes
+      WHERE is_active = 1
     `;
     const request = pool.request();
     if (groupId) {
       request.input('groupId', sql.Int, groupId);
-      queryText += ' WHERE group_id = @groupId';
+      queryText += ' AND group_id = @groupId';
     }
     queryText += ' ORDER BY parent_node_id, node_id';
     const result = await request.query(queryText);

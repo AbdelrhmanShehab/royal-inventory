@@ -45,6 +45,7 @@ export default function InventoryPage() {
   const [searchName, setSearchName] = useState('');
   const [searchSku, setSearchSku] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'warning' | 'depleted'>('all');
 
   // Sorting State
   const [sortField, setSortField] = useState<keyof StockItem>('item_code');
@@ -52,7 +53,7 @@ export default function InventoryPage() {
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 8;
+  const [itemsPerPage, setItemsPerPage] = useState(50);
 
   // Flatten tree nodes helper (excluding organizational group containers)
   const flattenNodes = (list: OrganizationNode[]): OrganizationNode[] => {
@@ -171,12 +172,23 @@ export default function InventoryPage() {
     }
   };
 
+  // Status counts for filter chips
+  const countAvailable = items.filter(i => i.qty_operational > getItemReorderLevel(i.item_code, i.reorder_level ?? 10)).length;
+  const countWarning  = items.filter(i => i.qty_operational > 0 && i.qty_operational <= getItemReorderLevel(i.item_code, i.reorder_level ?? 10)).length;
+  const countDepleted = items.filter(i => i.qty_operational === 0).length;
+
   // Filter Logic
   const filteredItems = items.filter(item => {
     const matchesName = (item.item_name_ar || '').includes(searchName);
     const matchesSku = (item.item_code || '').toLowerCase().includes(searchSku.toLowerCase());
     const matchesCategory = selectedCategory ? item.category === selectedCategory : true;
-    return matchesName && matchesSku && matchesCategory;
+    const reorder = getItemReorderLevel(item.item_code, item.reorder_level ?? 10);
+    const matchesStatus =
+      statusFilter === 'all'       ? true
+      : statusFilter === 'depleted'  ? item.qty_operational === 0
+      : statusFilter === 'warning'   ? item.qty_operational > 0 && item.qty_operational <= reorder
+      : /* available */               item.qty_operational > reorder;
+    return matchesName && matchesSku && matchesCategory && matchesStatus;
   });
 
   // Sort Logic
@@ -276,14 +288,14 @@ export default function InventoryPage() {
                     const isParent = n.children && n.children.length > 0;
                     return (
                       <option key={n.id} value={n.id}>
-                        {isParent ? `🏢 ${n.name} (المستودع الرئيسي - الكل)` : `📦 ${n.name}`}
+                        {isParent ? `${n.name} (المستودع الرئيسي - الكل)` : `${n.name}`}
                       </option>
                     );
                   })}
                 </select>
               ) : (
                 <span className="px-3.5 py-1.5 bg-blue-50 border border-blue-200 text-xs rounded-lg text-blue-700 font-bold shadow-2xs">
-                  🔒 {currentNodeName}
+                  {currentNodeName}
                 </span>
               )}
             </div>
@@ -333,6 +345,63 @@ export default function InventoryPage() {
             </select>
           </div>
         </div>
+
+        {/* Status Filter Chips */}
+        <div className="flex flex-wrap items-center gap-2 pt-4 border-t border-slate-100 mt-4">
+          <span className="text-[10px] font-black text-slate-500 uppercase tracking-wide">حالة الرصيد:</span>
+          <button
+            onClick={() => { setStatusFilter('all'); setCurrentPage(1); }}
+            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+              statusFilter === 'all'
+                ? 'bg-slate-800 text-white border-slate-800 shadow-sm'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400 hover:bg-slate-50'
+            }`}
+          >
+            الكل
+            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
+              statusFilter === 'all' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+            }`}>{items.length}</span>
+          </button>
+          <button
+            onClick={() => { setStatusFilter('available'); setCurrentPage(1); }}
+            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+              statusFilter === 'available'
+                ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                : 'bg-white text-emerald-700 border-emerald-200 hover:border-emerald-400 hover:bg-emerald-50'
+            }`}
+          >
+            متوفر
+            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
+              statusFilter === 'available' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-700'
+            }`}>{countAvailable}</span>
+          </button>
+          <button
+            onClick={() => { setStatusFilter('warning'); setCurrentPage(1); }}
+            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+              statusFilter === 'warning'
+                ? 'bg-amber-500 text-white border-amber-500 shadow-sm'
+                : 'bg-white text-amber-700 border-amber-200 hover:border-amber-400 hover:bg-amber-50'
+            }`}
+          >
+            تحذير — وشيك على النفاد
+            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
+              statusFilter === 'warning' ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-700'
+            }`}>{countWarning}</span>
+          </button>
+          <button
+            onClick={() => { setStatusFilter('depleted'); setCurrentPage(1); }}
+            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+              statusFilter === 'depleted'
+                ? 'bg-red-600 text-white border-red-600 shadow-sm'
+                : 'bg-white text-red-700 border-red-200 hover:border-red-400 hover:bg-red-50'
+            }`}
+          >
+            نافذ من المخزون
+            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
+              statusFilter === 'depleted' ? 'bg-white/20 text-white' : 'bg-red-100 text-red-700'
+            }`}>{countDepleted}</span>
+          </button>
+        </div>
       </div>
 
       {/* Modern Stock Table */}
@@ -342,70 +411,34 @@ export default function InventoryPage() {
         <EmptyState title="لا توجد أصناف مسجلة لهذه الوحدة" description="لم نجد أي أرصدة مخزنية حالياً." />
       ) : (
         <div className="flex flex-col gap-4">
-          <Card className="border-slate-200/60 overflow-hidden shadow-xs">
+          <Card className="border border-slate-200/80 overflow-hidden shadow-xs rounded-xl">
             <div className="w-full overflow-x-auto">
               <table className="w-full text-right border-collapse select-none">
-                <thead className="bg-slate-50/75 border-b border-slate-100 sticky top-0">
-                  <tr>
-                    <th className="px-4 py-4 text-xs font-bold text-slate-500 cursor-pointer hover:text-slate-800" onClick={() => handleSort('item_code')}>
+                <thead className="bg-slate-100/90 border-b border-slate-200 sticky top-0">
+                  <tr className="divide-x divide-x-reverse divide-slate-200">
+                    <th className="px-4 py-3.5 text-xs font-black text-slate-700 cursor-pointer hover:text-slate-900" onClick={() => handleSort('item_code')}>
                       <div className="flex items-center gap-1">
                         كود الصنف
                         <ArrowUpDown size={12} />
                       </div>
                     </th>
-                    <th className="px-4 py-4 text-xs font-bold text-slate-500 cursor-pointer hover:text-slate-800" onClick={() => handleSort('item_name_ar')}>
+                    <th className="px-4 py-3.5 text-xs font-black text-slate-700 cursor-pointer hover:text-slate-900" onClick={() => handleSort('item_name_ar')}>
                       <div className="flex items-center gap-1">
                         اسم الصنف التشغيلي
                         <ArrowUpDown size={12} />
                       </div>
                     </th>
-                    <th className="px-3 py-4 text-xs font-bold text-blue-700 text-left cursor-pointer hover:text-blue-900 bg-blue-50/30" onClick={() => handleSort('qty_operational')}>
-                      <div className="flex items-center gap-1 justify-end">
-                        الرصيد الفعلي
+                    <th className="px-3 py-3.5 text-xs font-black text-blue-800 text-center cursor-pointer hover:text-blue-950 bg-blue-50/50" onClick={() => handleSort('qty_operational')}>
+                      <div className="flex items-center gap-1 justify-center">
+                        الرصيد الفعلي المتاح
                         <ArrowUpDown size={12} />
                       </div>
                     </th>
-                    <th className="px-3 py-4 text-xs font-bold text-slate-500 text-center">حد التنبيه</th>
-                    <th className="px-3 py-4 text-xs font-bold text-slate-600 text-left cursor-pointer hover:text-slate-900 bg-slate-100/40" onClick={() => handleSort('qty_received')}>
-                      <div className="flex items-center gap-1 justify-end">
-                        المستلم
-                        <ArrowUpDown size={12} />
-                      </div>
-                    </th>
-                    <th className="px-3 py-4 text-xs font-bold text-amber-700 text-left cursor-pointer hover:text-amber-900" onClick={() => handleSort('qty_transfers')}>
-                      <div className="flex items-center gap-1 justify-end">
-                        تحويلات
-                        <ArrowUpDown size={12} />
-                      </div>
-                    </th>
-                    <th className="px-3 py-4 text-xs font-bold text-purple-700 text-left cursor-pointer hover:text-purple-900" onClick={() => handleSort('qty_laundry')}>
-                      <div className="flex items-center gap-1 justify-end">
-                        مغسلة
-                        <ArrowUpDown size={12} />
-                      </div>
-                    </th>
-                    <th className="px-3 py-4 text-xs font-bold text-blue-600 text-left cursor-pointer hover:text-blue-800" onClick={() => handleSort('qty_consumed')}>
-                      <div className="flex items-center gap-1 justify-end">
-                        استهلاك
-                        <ArrowUpDown size={12} />
-                      </div>
-                    </th>
-                    <th className="px-3 py-4 text-xs font-bold text-cyan-700 text-left cursor-pointer hover:text-cyan-900" onClick={() => handleSort('qty_returned')}>
-                      <div className="flex items-center gap-1 justify-end">
-                        مرتجع
-                        <ArrowUpDown size={12} />
-                      </div>
-                    </th>
-                    <th className="px-3 py-4 text-xs font-bold text-rose-700 text-left cursor-pointer hover:text-rose-900" onClick={() => handleSort('qty_wasted')}>
-                      <div className="flex items-center gap-1 justify-end">
-                        تالف / هدر / استبعاد
-                        <ArrowUpDown size={12} />
-                      </div>
-                    </th>
-                    <th className="px-3 py-4 text-xs font-bold text-slate-500 text-center">إجراءات</th>
+                    <th className="px-3 py-3.5 text-xs font-black text-indigo-700 text-center">حد التنبيه</th>
+                    <th className="px-3 py-3.5 text-xs font-black text-slate-500 text-center">التفاصيل والحركة</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-200">
                   {currentItems.map((item, idx) => {
                     const customReorder = getItemReorderLevel(item.item_code, item.reorder_level ?? 10);
                     const isLow = item.qty_operational <= customReorder;
@@ -415,69 +448,49 @@ export default function InventoryPage() {
                     return (
                       <tr 
                         key={`${item.item_code}-${idx}`} 
-                        onClick={() => handleRowClick(item)}
-                        className="hover:bg-slate-50/50 cursor-pointer transition-colors duration-150"
+                        className="odd:bg-white even:bg-slate-50/50 hover:bg-blue-50/40 transition-colors duration-150 divide-x divide-x-reverse divide-slate-200/80"
                       >
-                        <td className="px-4 py-3.5 text-xs font-bold text-slate-700">{item.item_code}</td>
+                        <td className="px-4 py-3.5 text-xs font-mono font-bold text-slate-700 bg-slate-50/30">{item.item_code}</td>
                         <td className="px-4 py-3.5 text-xs font-bold text-slate-800">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span>{item.item_name_ar}</span>
+                            {item.unit && (
+                              <span className="text-[10px] text-slate-400 font-semibold bg-slate-100 px-1.5 py-0.5 rounded">{item.unit}</span>
+                            )}
                             <Badge variant={statusVariant as any}>{statusLabel}</Badge>
                           </div>
                         </td>
-                        <td className="px-3 py-3.5 text-xs font-extrabold text-blue-700 text-left bg-blue-50/30">
-                          {item.qty_operational.toLocaleString()} {item.unit || 'وحدة'}
+                        <td className="px-3 py-3.5 text-center">
+                          <span className="text-sm font-black text-blue-700">{item.qty_operational.toLocaleString()}</span>
                         </td>
-                        {/* Custom Reorder Level Column */}
+                        {/* Reorder Threshold Column */}
                         <td className="px-3 py-3.5 text-center">
                           <button
                             onClick={(e) => handleOpenEditThreshold(e, item)}
-                            className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg text-indigo-700 font-bold text-xs transition-colors cursor-pointer"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg text-indigo-700 font-bold text-xs transition-colors cursor-pointer"
                             title="انقر لتعديل حد التنبيه"
                           >
                             <Sliders size={11} />
                             {customReorder}
                           </button>
                         </td>
-                        {/* 1. الكمية المستلمة */}
-                        <td className="px-3 py-3.5 text-xs font-bold text-slate-700 text-left bg-slate-50/40">
-                          {(item.qty_received || 0).toLocaleString()}
-                        </td>
-                        {/* 2. تحويلات */}
-                        <td className="px-3 py-3.5 text-xs font-semibold text-amber-700 text-left">
-                          {(item.qty_transfers || 0).toLocaleString()}
-                        </td>
-                        {/* 3. مغسلة */}
-                        <td className="px-3 py-3.5 text-xs font-semibold text-purple-700 text-left">
-                          {(item.qty_laundry || 0).toLocaleString()}
-                        </td>
-                        {/* 4. استهلاك تشغيلي */}
-                        <td className="px-3 py-3.5 text-xs font-semibold text-blue-600 text-left">
-                          {(item.qty_consumed || 0).toLocaleString()}
-                        </td>
-                        {/* 5. مرتجع */}
-                        <td className="px-3 py-3.5 text-xs font-semibold text-cyan-700 text-left">
-                          {(item.qty_returned || 0).toLocaleString()}
-                        </td>
-                        {/* 6. تالف / هدر / استبعاد */}
-                        <td className="px-3 py-3.5 text-xs font-semibold text-rose-700 text-left">
-                          {(item.qty_wasted || 0).toLocaleString()}
-                        </td>
-                        <td className="px-3 py-3.5 text-center">
-                          <div className="flex items-center justify-center gap-1">
+                        {/* Details Drawer Button — prominent */}
+                        <td className="px-3 py-3 text-center">
+                          <div className="flex items-center justify-center gap-2">
                             <button 
-                              onClick={(e) => handleOpenEditThreshold(e, item)}
-                              className="p-1.5 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all cursor-pointer"
+                              onClick={(e) => { e.stopPropagation(); handleOpenEditThreshold(e, item); }}
+                              className="p-1.5 rounded-lg text-indigo-400 hover:text-indigo-700 hover:bg-indigo-50 border border-transparent hover:border-indigo-200 transition-all cursor-pointer"
                               title="تعديل حد التنبيه"
                             >
-                              <Edit3 size={13} />
+                              <Edit3 size={14} />
                             </button>
                             <button 
-                              onClick={() => handleRowClick(item)}
-                              className="p-1.5 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all cursor-pointer"
-                              title="عرض تفاصيل الصنف وحركة المخزون"
+                              onClick={(e) => { e.stopPropagation(); handleRowClick(item); }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-bold shadow-xs transition-all cursor-pointer"
+                              title="عرض بطاقة الصنف والتفاصيل الكاملة"
                             >
                               <Info size={13} />
+                              التفاصيل
                             </button>
                           </div>
                         </td>
@@ -490,54 +503,71 @@ export default function InventoryPage() {
           </Card>
 
           {/* Clean Pagination Controls */}
-          {totalPages > 1 && (
-            <div className="flex justify-between items-center bg-white border border-slate-200/80 px-6 py-3.5 rounded-xl shadow-xs select-none">
-              <span className="text-xs text-slate-400 font-bold">
-                عرض {indexOfFirstItem + 1} - {Math.min(indexOfLastItem, filteredItems.length)} من أصل {filteredItems.length} صنف تشغيلي
+          <div className="flex flex-col sm:flex-row justify-between items-center bg-white border border-slate-200/80 px-6 py-3.5 rounded-xl shadow-xs select-none gap-3">
+            <div className="flex items-center gap-4 text-xs">
+              <span className="text-slate-500 font-bold">
+                عرض {filteredItems.length === 0 ? 0 : indexOfFirstItem + 1} - {Math.min(indexOfLastItem, filteredItems.length)} من أصل {filteredItems.length} صنف تشغيلي
               </span>
-              <div className="flex gap-1">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  disabled={currentPage === 1}
-                  onClick={() => handlePageChange(currentPage - 1)}
+              <div className="flex items-center gap-1.5 text-slate-500 font-semibold">
+                <span>عرض بالصفحة:</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => {
+                    setItemsPerPage(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-bold text-slate-700 focus:outline-none focus:border-blue-500 cursor-pointer"
                 >
-                  السابق
-                </Button>
-                {getPageNumbers().map((page, idx) => {
-                  if (page === '...') {
-                    return (
-                      <span key={`ellipsis-${idx}`} className="w-8 h-8 flex items-center justify-center text-xs text-slate-400 select-none">
-                        ...
-                      </span>
-                    );
-                  }
-                  
-                  return (
-                    <button
-                      key={page}
-                      onClick={() => handlePageChange(page as number)}
-                      className={`w-8 h-8 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        currentPage === page 
-                          ? 'bg-blue-600 text-white' 
-                          : 'bg-transparent text-slate-500 hover:bg-slate-50'
-                      }`}
-                    >
-                      {page}
-                    </button>
-                  );
-                })}
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  disabled={currentPage === totalPages}
-                  onClick={() => handlePageChange(currentPage + 1)}
-                >
-                  التالي
-                </Button>
+                  <option value={25}>25 صنف</option>
+                  <option value={50}>50 صنف</option>
+                  <option value={100}>100 صنف</option>
+                  <option value={200}>200 صنف</option>
+                </select>
               </div>
             </div>
-          )}
+
+            <div className="flex items-center gap-1.5">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                disabled={currentPage === 1}
+                onClick={() => handlePageChange(currentPage - 1)}
+              >
+                السابق
+              </Button>
+              {getPageNumbers().map((page, idx) => {
+                if (page === '...') {
+                  return (
+                    <span key={`ellipsis-${idx}`} className="w-8 h-8 flex items-center justify-center text-xs text-slate-400 select-none">
+                      ...
+                    </span>
+                  );
+                }
+                
+                return (
+                  <button
+                    key={page}
+                    onClick={() => handlePageChange(page as number)}
+                    className={`min-w-8 h-8 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      currentPage === page 
+                        ? 'bg-blue-600 text-white shadow-xs' 
+                        : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    {page}
+                  </button>
+                );
+              })}
+              <Button 
+                variant="outline" 
+                size="sm" 
+                disabled={currentPage >= totalPages || totalPages === 0}
+                onClick={() => handlePageChange(currentPage + 1)}
+              >
+                التالي
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -698,7 +728,7 @@ export default function InventoryPage() {
                 className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
               />
               <p className="text-[11px] text-slate-500 font-medium leading-relaxed mt-1 bg-amber-50 border border-amber-100 p-2.5 rounded-lg text-amber-900">
-                💡 يعتبر الصنف ضمن الأصناف الوشيكة على النفاد في التنبيهات عندما يصبح رصيده المتوفر أقل من أو يساوي هذا الحد.
+                يعتبر الصنف ضمن الأصناف الوشيكة على النفاد في التنبيهات عندما يصبح رصيده المتوفر أقل من أو يساوي هذا الحد.
               </p>
             </div>
 

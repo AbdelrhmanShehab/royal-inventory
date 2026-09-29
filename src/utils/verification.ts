@@ -45,13 +45,6 @@ export const validatePassword = (password: string): ValidationResult => {
     };
   }
 
-  if (password.length < 6) {
-    return {
-      isValid: false,
-      error: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل',
-    };
-  }
-
   return {
     isValid: true,
     error: null,

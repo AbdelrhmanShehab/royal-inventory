@@ -2,7 +2,18 @@
 
 const Joi = require('joi');
 
-const VALID_ROLES = ['admin', 'manager', 'warehouse_manager', 'warehouse_head', 'accountant', 'staff'];
+const VALID_ROLES = [
+  'admin',
+  'manager',
+  'warehouse_manager',
+  'warehouse_head',
+  'accountant',
+  'staff',
+  'laundry_supervisor',
+  'laundry_cashier',
+  'uniform_clerk',
+  'laundry_operator',
+];
 
 const createUserSchema = Joi.object({
   username: Joi.string().trim().lowercase().min(3).max(50).required()

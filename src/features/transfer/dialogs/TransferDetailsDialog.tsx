@@ -198,6 +198,22 @@ export const TransferDetailsDialog: React.FC<TransferDetailsDialogProps> = ({
                       <p className="font-bold text-slate-800">{transfer.reason || 'لا يوجد سبب محدد'}</p>
                       <p className="text-[10px] text-slate-500">{transfer.notes || 'لا توجد ملاحظات إضافية'}</p>
                     </div>
+
+                    {(transfer.confirmedBy || transfer.confirmedAt) && (
+                      <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-xl space-y-1.5 md:col-span-2">
+                        <span className="text-[10px] text-emerald-700 flex items-center gap-1 font-semibold">
+                          <CheckCircle2 size={13} /> استلام وتأكيد الشحنة النهائي:
+                        </span>
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <p className="font-bold text-emerald-900 text-sm">
+                            تم الاستلام بواسطة: {transfer.confirmerNameAr || transfer.confirmerUsername || `مستخدم #${transfer.confirmedBy}`}
+                          </p>
+                          <p className="text-xs text-emerald-700 font-mono flex items-center gap-1">
+                            <Clock size={12} /> {transfer.confirmedAt ? new Date(transfer.confirmedAt).toLocaleString('ar-SA') : '—'}
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -282,7 +298,7 @@ export const TransferDetailsDialog: React.FC<TransferDetailsDialogProps> = ({
                   {/* DRAFT ACTIONS */}
                   {transfer.status === 'draft' && (
                     <>
-                      {(transfer.txnType === 'internal_transfer' || transfer.txnType === 'return') && (
+                      {(transfer.toNodeId != null || transfer.txnType === 'internal_transfer' || transfer.txnType === 'return' || transfer.txnType === 'laundry') && (
                         <PermissionGate permission={TRANSFER_PERMISSIONS.SUBMIT_APPROVAL}>
                           <Button 
                             variant="primary" 
@@ -300,7 +316,7 @@ export const TransferDetailsDialog: React.FC<TransferDetailsDialogProps> = ({
                         </PermissionGate>
                       )}
 
-                      {transfer.txnType !== 'internal_transfer' && transfer.txnType !== 'return' && (
+                      {transfer.toNodeId == null && transfer.txnType !== 'internal_transfer' && transfer.txnType !== 'return' && transfer.txnType !== 'laundry' && (
                         <PermissionGate permission={TRANSFER_PERMISSIONS.CONFIRM_TRANSFER}>
                           <Button 
                             variant="primary" 

@@ -260,8 +260,8 @@ const receiveTransfer = async (userId, data) => {
         expectedQty,
         actualQty,
         rejectedQty,
-        rejectReason: rejectedQty > 0 ? item.rejectReason : null,
-        rejectNotes: rejectedQty > 0 ? item.rejectNotes : null,
+        rejectReason: item.rejectReason || null,
+        rejectNotes: item.rejectNotes || null,
       }, transaction);
 
       // Update transfer item totals
@@ -539,7 +539,7 @@ const updateBatchStatus = async (userId, batchId, status) => {
 
         // Deduct chemicals from operational inventory (laundry consumption)
         await stockRepo.adjustStock(
-          activeNodeId, 
+          activeNodeId,
           cons.chemicalItemCode,
           'qty_consumed',
           cons.actualQty,
@@ -753,7 +753,7 @@ const createReturnDraft = async (userId, data) => {
       const remainingAllowed = (originalItem.receivedQty || originalItem.sentQty) - alreadyReturned;
 
       if (item.expectedQty > remainingAllowed) {
-        throw new BadRequestError(`Cannot return ${item.expectedQty} of ${item.itemCode}. Max outstanding remaining is ${remainingAllowed}`);
+        throw new BadRequestError(`لا يمكن إرجاع كمية ${item.expectedQty} من الصنف ${item.itemCode}. الحد الأقصى المتبقي في المغسلة هو ${remainingAllowed}`);
       }
 
       await laundryRepo.createReturnItem({
@@ -818,6 +818,7 @@ const createReturnDraft = async (userId, data) => {
     return { returnId, status: 'completed', message: 'تم إرجاع البياضات النظيفة بنجاح وإعادتها للرصيد المتاح بالمستودع' };
   } catch (err) {
     await transaction.rollback();
+    if (err.isOperational) throw err;
     throw new DatabaseError(`Failed to process clean laundry return: ${err.message}`);
   }
 };
@@ -1198,11 +1199,11 @@ const syncComsysPOSOrders = async (userId) => {
         let isIroning = false;
         for (const line of lines) {
           if (line.itemNameAr?.includes('كي') ||
-              line.itemNameAr?.includes('مكواة') ||
-              line.itemNameEn?.toLowerCase().includes('press') ||
-              line.itemNameEn?.toLowerCase().includes('iron') ||
-              line.itemCode?.toString().toLowerCase().includes('iron') ||
-              line.itemCode?.toString().toLowerCase().includes('press')) {
+            line.itemNameAr?.includes('مكواة') ||
+            line.itemNameEn?.toLowerCase().includes('press') ||
+            line.itemNameEn?.toLowerCase().includes('iron') ||
+            line.itemCode?.toString().toLowerCase().includes('iron') ||
+            line.itemCode?.toString().toLowerCase().includes('press')) {
             isIroning = true;
             break;
           }
@@ -1255,7 +1256,7 @@ const syncComsysPOSOrders = async (userId) => {
     }, transaction);
 
     await transaction.commit();
-    const skippedCount = Math.max(0, (posItemsRes.recordset?.length || 0) - ordersImported);
+    const skippedCount = Math.max(0, (comsysOrders.length || 0) - ordersImported);
     return {
       newTickets: ordersImported,
       skipped: skippedCount,
@@ -1401,6 +1402,14 @@ const getLatestZkCheckins = async (limit) => {
   return await zkRepo.getLatestCheckins(limit);
 };
 
+const getZkTransactions = async (params) => {
+  return await zkRepo.getTransactionHistory(params);
+};
+
+const getZkEmployees = async (search, limit) => {
+  return await zkRepo.searchEmployees(search, limit || 1000);
+};
+
 const getZkEmployeeDetails = async (userCode) => {
   const details = await zkRepo.getEmployeeDetails(userCode);
   if (!details) {
@@ -1479,6 +1488,7 @@ const getUnifiedDashboardSummary = async (startDate, endDate) => {
   };
 };
 
+
 module.exports = {
   createMachine,
   getMachines,
@@ -1519,6 +1529,8 @@ module.exports = {
   classifyChemical,
   getLaundryStock,
   getLatestZkCheckins,
+  getZkTransactions,
+  getZkEmployees,
   getZkEmployeeDetails,
   recordZkHandoverReceive,
   getZkHandoverDashboard,

@@ -13,8 +13,13 @@ export interface InventoryItem {
 }
 
 export interface StockItem {
+  nodeId?: number;
+  node_id?: number;
+  nodeNameAr?: string;
   item_code: string;
   item_name_ar: string;
+  item_name?: string;
+  itemNameAr?: string;
   item_name_en?: string;
 
   category?: string;

@@ -29,7 +29,11 @@ const ROLES: { key: UserType['role']; label: string; variant: 'danger' | 'warnin
   { key: 'warehouse_manager', label: 'مدير مستودع', variant: 'info' },
   { key: 'warehouse_head', label: 'أمين مستودع', variant: 'info' },
   { key: 'accountant', label: 'محاسب مالي', variant: 'neutral' },
-  { key: 'staff', label: 'موظف تشغيل', variant: 'neutral' }
+  { key: 'staff', label: 'موظف تشغيل', variant: 'neutral' },
+  { key: 'laundry_supervisor', label: 'مشرف المغسلة', variant: 'warning' },
+  { key: 'laundry_cashier', label: 'كاشير المغسلة', variant: 'success' },
+  { key: 'uniform_clerk', label: 'مسؤول عهد اليونيفورم', variant: 'info' },
+  { key: 'laundry_operator', label: 'مشغل مغسلة', variant: 'neutral' }
 ];
 
 const roleLabels: Record<string, { text: string; variant: any }> = {
@@ -38,7 +42,11 @@ const roleLabels: Record<string, { text: string; variant: any }> = {
   warehouse_manager: { text: 'مدير مستودع', variant: 'info' },
   warehouse_head: { text: 'أمين مستودع', variant: 'info' },
   accountant: { text: 'محاسب', variant: 'neutral' },
-  staff: { text: 'موظف تشغيل', variant: 'neutral' }
+  staff: { text: 'موظف تشغيل', variant: 'neutral' },
+  laundry_supervisor: { text: 'مشرف مغسلة', variant: 'warning' },
+  laundry_cashier: { text: 'كاشير مغسلة', variant: 'success' },
+  uniform_clerk: { text: 'عهد يونيفورم', variant: 'info' },
+  laundry_operator: { text: 'مشغل مغسلة', variant: 'neutral' }
 };
 
 // Helper to flatten node tree for selection
@@ -61,7 +69,7 @@ export default function UsersPage() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 8;
+  const [itemsPerPage, setItemsPerPage] = useState(50);
 
   // Page level alerts (Success & Error)
   const [pageSuccess, setPageSuccess] = useState<string | null>(null);
@@ -285,8 +293,6 @@ export default function UsersPage() {
 
     if (!createForm.password) {
       errors.password = 'يرجى إدخال كلمة المرور الأولية للحساب';
-    } else if (createForm.password.length < 6) {
-      errors.password = 'كلمة المرور يجب أن تكون 6 أحرف على الأقل';
     }
 
     if (Object.keys(errors).length > 0) {
@@ -324,11 +330,6 @@ export default function UsersPage() {
     if (!newPassword) {
       setResetFieldErrors({ password: 'يرجى إدخال كلمة المرور الجديدة' });
       setResetError('يرجى إدخال كلمة المرور الجديدة.');
-      return;
-    }
-    if (newPassword.length < 6) {
-      setResetFieldErrors({ password: 'كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل' });
-      setResetError('كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل.');
       return;
     }
 
@@ -430,20 +431,20 @@ export default function UsersPage() {
         <EmptyState title="لا يوجد مستخدمون يطابقون البحث" description="يرجى مراجعة الاسم أو تغيير كلمات البحث." />
       ) : (
         <div className="flex flex-col gap-4">
-          <Card className="border-slate-200/60 overflow-hidden shadow-xs">
+          <Card className="border border-slate-200/80 overflow-hidden shadow-xs rounded-xl">
             <div className="w-full overflow-x-auto">
               <table className="w-full text-right border-collapse select-none">
-                <thead className="bg-slate-50/80 border-b border-slate-100 sticky top-0">
-                  <tr>
-                    <th className="px-6 py-4 text-xs font-bold text-slate-500">اسم المستخدم (الحساب)</th>
-                    <th className="px-6 py-4 text-xs font-bold text-slate-500">الاسم باللغة العربية</th>
-                    <th className="px-6 py-4 text-xs font-bold text-slate-500">الدور والتصنيف</th>
-                    <th className="px-6 py-4 text-xs font-bold text-slate-500">الوحدة التشغيلية المرتبطة</th>
-                    <th className="px-6 py-4 text-xs font-bold text-slate-500">الحالة</th>
-                    <th className="px-6 py-4 text-xs font-bold text-slate-500 text-center">الإجراءات</th>
+                <thead className="bg-slate-100/90 border-b border-slate-200 sticky top-0 text-slate-700 text-xs font-black">
+                  <tr className="divide-x divide-x-reverse divide-slate-200">
+                    <th className="px-5 py-3.5">اسم المستخدم (الحساب)</th>
+                    <th className="px-5 py-3.5">الاسم باللغة العربية</th>
+                    <th className="px-5 py-3.5">الدور والتصنيف</th>
+                    <th className="px-5 py-3.5">الوحدة التشغيلية المرتبطة</th>
+                    <th className="px-5 py-3.5">الحالة</th>
+                    <th className="px-5 py-3.5 text-center">الإجراءات</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-200 text-xs">
                   {currentUsers.map((user) => {
                     const roleInfo = roleLabels[user.role] || { text: user.role, variant: 'neutral' };
                     const isActive = user.isActive;
@@ -451,30 +452,34 @@ export default function UsersPage() {
                     return (
                       <tr 
                         key={user.id}
-                        className="hover:bg-slate-50/60 transition-colors duration-150"
+                        className="odd:bg-white even:bg-slate-50/50 hover:bg-blue-50/60 transition-colors duration-150 divide-x divide-x-reverse divide-slate-200/80"
                       >
-                        <td className="px-6 py-4 text-xs font-bold text-slate-800 flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-700 border border-blue-200 flex items-center justify-center font-bold text-xs uppercase shadow-2xs">
-                            {user.username.substring(0, 2)}
+                        <td className="px-5 py-3.5 font-bold text-slate-800 bg-slate-50/30">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-700 border border-blue-200 flex items-center justify-center font-bold text-xs uppercase shadow-2xs">
+                              {user.username.substring(0, 2)}
+                            </div>
+                            <span className="font-mono text-slate-700">{user.username}</span>
                           </div>
-                          <span className="font-mono text-slate-700">{user.username}</span>
                         </td>
-                        <td className="px-6 py-4 text-xs font-bold text-slate-800">
+                        <td className="px-5 py-3.5 font-bold text-slate-800">
                           {user.fullNameAr}
                         </td>
-                        <td className="px-6 py-4 text-xs">
+                        <td className="px-5 py-3.5">
                           <Badge variant={roleInfo.variant}>{roleInfo.text}</Badge>
                         </td>
-                        <td className="px-6 py-4 text-xs text-slate-600 font-semibold flex items-center gap-1.5 mt-2">
-                          <Building2 size={13} className="text-slate-400" />
-                          <span>{user.nodeNameAr || 'المكتب الرئيسي'}</span>
+                        <td className="px-5 py-3.5 text-slate-700 font-semibold">
+                          <div className="flex items-center gap-1.5">
+                            <Building2 size={13} className="text-slate-400" />
+                            <span>{user.nodeNameAr || 'المكتب الرئيسي'}</span>
+                          </div>
                         </td>
-                        <td className="px-6 py-4 text-xs">
+                        <td className="px-5 py-3.5">
                           <Badge variant={isActive ? 'success' : 'neutral'}>
                             {isActive ? 'نشط ومصرح' : 'معطل'}
                           </Badge>
                         </td>
-                        <td className="px-6 py-4 text-center">
+                        <td className="px-5 py-3.5 text-center">
                           <div className="flex items-center justify-center gap-1">
                             {/* Toggle Active Status Button */}
                             <button 
@@ -482,7 +487,7 @@ export default function UsersPage() {
                               disabled={toggleStatusMutation.isPending}
                               className={`p-1.5 rounded-lg transition-all cursor-pointer ${
                                 isActive 
-                                  ? 'text-slate-400 hover:text-amber-600 hover:bg-amber-50' 
+                                   ? 'text-slate-400 hover:text-amber-600 hover:bg-amber-50' 
                                   : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'
                               }`}
                               title={isActive ? 'تعطيل الحساب' : 'تنشيط الحساب'}
@@ -531,45 +536,52 @@ export default function UsersPage() {
             </div>
           </Card>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex justify-between items-center bg-white border border-slate-200/80 px-6 py-3.5 rounded-xl shadow-xs select-none">
-              <span className="text-xs text-slate-400 font-bold">
-                عرض {indexOfFirstItem + 1} - {Math.min(indexOfLastItem, filteredUsers.length)} من أصل {filteredUsers.length} مستخدم
+          {/* Clean Pagination Controls */}
+          <div className="flex flex-col sm:flex-row justify-between items-center bg-white border border-slate-200/80 px-6 py-3.5 rounded-xl shadow-xs select-none gap-3">
+            <div className="flex items-center gap-4 text-xs">
+              <span className="text-slate-500 font-bold">
+                عرض {filteredUsers.length === 0 ? 0 : indexOfFirstItem + 1} - {Math.min(indexOfLastItem, filteredUsers.length)} من أصل {filteredUsers.length} مستخدم
               </span>
-              <div className="flex gap-1">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  disabled={currentPage === 1}
-                  onClick={() => setCurrentPage(prev => prev - 1)}
+              <div className="flex items-center gap-1.5 text-slate-500 font-semibold">
+                <span>عرض بالصفحة:</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => {
+                    setItemsPerPage(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-bold text-slate-700 focus:outline-none focus:border-blue-500 cursor-pointer"
                 >
-                  السابق
-                </Button>
-                {Array.from({ length: totalPages }).map((_, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setCurrentPage(idx + 1)}
-                    className={`w-8 h-8 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      currentPage === idx + 1 
-                        ? 'bg-blue-600 text-white' 
-                        : 'bg-transparent text-slate-500 hover:bg-slate-50'
-                    }`}
-                  >
-                    {idx + 1}
-                  </button>
-                ))}
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  disabled={currentPage === totalPages}
-                  onClick={() => setCurrentPage(prev => prev + 1)}
-                >
-                  التالي
-                </Button>
+                  <option value={25}>25 مستخدم</option>
+                  <option value={50}>50 مستخدم</option>
+                  <option value={100}>100 مستخدم</option>
+                  <option value={200}>200 مستخدم</option>
+                </select>
               </div>
             </div>
-          )}
+
+            <div className="flex items-center gap-1.5">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(prev => prev - 1)}
+              >
+                السابق
+              </Button>
+              <span className="px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 font-black rounded-lg text-xs">
+                صفحة {currentPage} من {Math.max(1, totalPages)}
+              </span>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                disabled={currentPage >= totalPages || totalPages === 0}
+                onClick={() => setCurrentPage(prev => prev + 1)}
+              >
+                التالي
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 

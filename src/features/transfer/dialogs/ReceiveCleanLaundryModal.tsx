@@ -122,17 +122,18 @@ export default function ReceiveCleanLaundryModal({
           });
 
         if (activeItems.length === 0) {
-          // If all remaining are 0, still show sent items with 0
+          // All items in this transfer have already been returned to warehouse
           const allItems = transfer.items.map(item => ({
             itemCode: item.itemCode,
             itemNameAr: item.itemNameAr || item.itemCode,
-            maxAvailableAtLaundry: Number(item.sentQty || 0),
-            receivedCleanQty: Number(item.sentQty || 0),
+            maxAvailableAtLaundry: 0,
+            receivedCleanQty: 0,
             damagedQty: 0,
             rejectReason: '',
             notes: ''
           }));
           setItems(allItems);
+          setErrorMessage('تنبيه: تم استلام وإرجاع كافة كميات هذه الشحنة بالكامل مسبقاً (الرصيد المتبقي في المغسلة: 0). لا توجد كميات معلقة للاستلام.');
         } else {
           setItems(activeItems);
         }
@@ -348,7 +349,11 @@ export default function ReceiveCleanLaundryModal({
                           {row.itemNameAr}
                         </td>
                         <td className="py-2.5 px-3 text-center font-extrabold text-amber-700 bg-amber-50/50">
-                          {row.maxAvailableAtLaundry} عدد
+                          {row.maxAvailableAtLaundry > 0 ? (
+                            `${row.maxAvailableAtLaundry} عدد`
+                          ) : (
+                            <span className="text-slate-400 font-semibold text-[11px]">0 عدد</span>
+                          )}
                         </td>
                         <td className="py-2.5 px-3 text-center">
                           <div className="inline-flex items-center gap-1.5">
@@ -357,14 +362,20 @@ export default function ReceiveCleanLaundryModal({
                               min={0}
                               max={row.maxAvailableAtLaundry}
                               value={row.receivedCleanQty}
+                              disabled={row.maxAvailableAtLaundry === 0}
                               onChange={(e) => handleCleanQtyChange(idx, Number(e.target.value))}
-                              className="w-20 px-2 py-1 bg-white border border-emerald-300 rounded-lg text-center font-extrabold text-emerald-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                              className="w-20 px-2 py-1 bg-white border border-emerald-300 rounded-lg text-center font-extrabold text-emerald-800 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200"
                             />
                             <span className="text-[10px] text-slate-400">عدد</span>
                           </div>
                         </td>
                         <td className="py-2.5 px-3 text-center">
-                          {row.receivedCleanQty < row.maxAvailableAtLaundry ? (
+                          {row.maxAvailableAtLaundry === 0 ? (
+                            <span className="text-slate-500 font-bold text-[11px] flex items-center justify-center gap-1">
+                              <CheckCircle2 size={13} className="text-slate-400" />
+                              مستلم بالكامل مسبقاً
+                            </span>
+                          ) : row.receivedCleanQty < row.maxAvailableAtLaundry ? (
                             <div className="flex items-center justify-center gap-1 text-red-600 font-bold text-[11px]">
                               <span>عجز: {row.maxAvailableAtLaundry - row.receivedCleanQty}</span>
                             </div>
@@ -415,8 +426,8 @@ export default function ReceiveCleanLaundryModal({
             variant="primary"
             size="sm"
             onClick={handleSubmit}
-            disabled={isSubmitting || isLoadingDetails || items.length === 0}
-            className="bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold gap-2 shadow-xs px-5 cursor-pointer"
+            disabled={isSubmitting || isLoadingDetails || items.length === 0 || items.every(i => i.maxAvailableAtLaundry === 0)}
+            className="bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold gap-2 shadow-xs px-5 cursor-pointer disabled:bg-slate-300 disabled:cursor-not-allowed"
           >
             {isSubmitting ? (
               <span className="flex items-center gap-2">

@@ -118,7 +118,11 @@ const getAllNodesTotalStock = async () => {
     const pool = getSystemDB();
     const result = await pool.request()
       .query(`
-        SELECT node_id AS nodeId, SUM(qty_operational) AS totalStock
+        SELECT 
+          node_id AS nodeId, 
+          SUM(qty_operational) AS totalStock,
+          COUNT(DISTINCT item_code) AS itemCount,
+          COUNT(DISTINCT CASE WHEN qty_operational > 0 THEN item_code END) AS activeItemCount
         FROM ops.operational_stock
         GROUP BY node_id
       `);
@@ -148,10 +152,11 @@ const getAllStock = async (groupId = null) => {
       INNER JOIN ops.inventory_nodes n ON s.node_id = n.node_id
       LEFT JOIN ops.comsys_warehouses w ON n.comsys_store_code = w.store_code AND n.division = w.division
       LEFT JOIN ops.comsys_items i ON s.item_code = i.item_code AND i.division = w.division
+      WHERE n.is_active = 1
     `;
     if (groupId) {
       request.input('groupId', sql.Int, groupId);
-      queryText += ' WHERE n.group_id = @groupId';
+      queryText += ' AND n.group_id = @groupId';
     }
     const result = await request.query(queryText);
     return result.recordset;

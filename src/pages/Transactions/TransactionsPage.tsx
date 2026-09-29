@@ -37,7 +37,7 @@ export default function TransactionsPage() {
   // Sorting & Pagination
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 8;
+  const [itemsPerPage, setItemsPerPage] = useState(50);
 
   // Flatten tree nodes helper
   const flattenNodes = (list: OrganizationNode[]): OrganizationNode[] => {
@@ -253,27 +253,27 @@ export default function TransactionsPage() {
         <EmptyState title="لا توجد حركات مطابقة لفلاتر البحث" description="يرجى تعديل معايير البحث والمحاولة مجدداً." />
       ) : (
         <div className="flex flex-col gap-4">
-          <Card className="border-slate-200/60 overflow-hidden shadow-xs">
+          <Card className="border border-slate-200/80 overflow-hidden shadow-xs rounded-xl">
             <div className="w-full overflow-x-auto">
               <table className="w-full text-right border-collapse select-none">
-                <thead className="bg-slate-50/75 border-b border-slate-100 sticky top-0">
-                  <tr>
-                    <th className="px-6 py-4 text-xs font-bold text-slate-500">رقم الحركة</th>
-                    <th className="px-6 py-4 text-xs font-bold text-slate-500">نوع الحركة</th>
-                    <th className="px-6 py-4 text-xs font-bold text-slate-500">البيان والملاحظات</th>
-                    <th className="px-6 py-4 text-xs font-bold text-slate-500">من وحدة</th>
-                    <th className="px-6 py-4 text-xs font-bold text-slate-500">إلى وحدة</th>
-                    <th className="px-6 py-4 text-xs font-bold text-slate-500">المسؤول</th>
-                    <th className="px-6 py-4 text-xs font-bold text-slate-500 cursor-pointer hover:text-slate-800" onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}>
+                <thead className="bg-slate-100/90 border-b border-slate-200 sticky top-0 text-slate-700 font-black text-xs">
+                  <tr className="divide-x divide-x-reverse divide-slate-200">
+                    <th className="px-5 py-3.5">رقم الحركة</th>
+                    <th className="px-5 py-3.5">نوع الحركة</th>
+                    <th className="px-5 py-3.5">البيان والملاحظات</th>
+                    <th className="px-5 py-3.5">من وحدة</th>
+                    <th className="px-5 py-3.5">إلى وحدة</th>
+                    <th className="px-5 py-3.5">المسؤول</th>
+                    <th className="px-5 py-3.5 cursor-pointer hover:text-slate-900" onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}>
                       <div className="flex items-center gap-1.5">
                         التاريخ
                         <ArrowUpDown size={12} />
                       </div>
                     </th>
-                    <th className="px-6 py-4 text-xs font-bold text-slate-500">الحالة</th>
+                    <th className="px-5 py-3.5 text-center">الحالة</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-200 text-xs">
                   {currentTxs.map((tx) => {
                     const typeVariants: Record<string, string> = {
                       transfer: 'info',
@@ -289,23 +289,23 @@ export default function TransactionsPage() {
                       <tr
                         key={tx.txnId}
                         onClick={() => handleRowClick(tx)}
-                        className="hover:bg-slate-50/50 cursor-pointer transition-colors duration-150"
+                        className="odd:bg-white even:bg-slate-50/50 hover:bg-blue-50/60 cursor-pointer transition-colors duration-150 divide-x divide-x-reverse divide-slate-200/80"
                       >
-                        <td className="px-6 py-4 text-xs font-bold text-slate-700">#{tx.txnId}</td>
-                        <td className="px-6 py-4 text-xs">
+                        <td className="px-5 py-3.5 font-mono font-extrabold text-blue-700 bg-slate-50/30">#{tx.txnId}</td>
+                        <td className="px-5 py-3.5">
                           <Badge variant={typeVar as any}>{txTypeNames[tx.txnType] || tx.txnType}</Badge>
                         </td>
-                        <td className="px-6 py-4 text-xs font-bold text-slate-850">
+                        <td className="px-5 py-3.5 font-bold text-slate-800">
                           <div className="flex flex-col">
                             <span>{tx.notes || 'تحويل مخزني داخلي'}</span>
-                            {tx.referenceNo && <span className="text-[9px] text-slate-400 mt-0.5">مرجع: {tx.referenceNo}</span>}
+                            {tx.referenceNo && <span className="text-[10px] text-slate-400 mt-0.5">مرجع: {tx.referenceNo}</span>}
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-xs text-slate-500 font-semibold">{getNodeName(tx.fromNodeId)}</td>
-                        <td className="px-6 py-4 text-xs text-slate-500 font-semibold">{getNodeName(tx.toNodeId)}</td>
-                        <td className="px-6 py-4 text-xs text-slate-600 font-semibold">{tx.createdBy}</td>
-                        <td className="px-6 py-4 text-xs text-slate-400 font-bold">{tx.createdAt}</td>
-                        <td className="px-6 py-4 text-xs">
+                        <td className="px-5 py-3.5 text-slate-700 font-semibold">{getNodeName(tx.fromNodeId)}</td>
+                        <td className="px-5 py-3.5 text-slate-700 font-semibold">{getNodeName(tx.toNodeId)}</td>
+                        <td className="px-5 py-3.5 text-slate-600 font-semibold">{tx.createdBy}</td>
+                        <td className="px-5 py-3.5 font-mono text-slate-500 font-bold">{tx.createdAt}</td>
+                        <td className="px-5 py-3.5 text-center">
                           {(() => {
                             const statusMap: Record<string, { label: string; variant: 'neutral' | 'warning' | 'info' | 'success' | 'danger' }> = {
                               draft: { label: 'مسودة', variant: 'neutral' },
@@ -329,44 +329,52 @@ export default function TransactionsPage() {
             </div>
           </Card>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex justify-between items-center bg-white border border-slate-200/80 px-6 py-3.5 rounded-xl shadow-xs select-none">
-              <span className="text-xs text-slate-400 font-bold">
-                عرض {indexOfFirstItem + 1} - {Math.min(indexOfLastItem, filteredTxs.length)} من أصل {filteredTxs.length} حركة تشغيلية
+          {/* Clean Pagination Controls */}
+          <div className="flex flex-col sm:flex-row justify-between items-center bg-white border border-slate-200/80 px-6 py-3.5 rounded-xl shadow-xs select-none gap-3">
+            <div className="flex items-center gap-4 text-xs">
+              <span className="text-slate-500 font-bold">
+                عرض {filteredTxs.length === 0 ? 0 : indexOfFirstItem + 1} - {Math.min(indexOfLastItem, filteredTxs.length)} من أصل {filteredTxs.length} حركة تشغيلية
               </span>
-              <div className="flex gap-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={currentPage === 1}
-                  onClick={() => handlePageChange(currentPage - 1)}
+              <div className="flex items-center gap-1.5 text-slate-500 font-semibold">
+                <span>عرض بالصفحة:</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => {
+                    setItemsPerPage(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-bold text-slate-700 focus:outline-none focus:border-blue-500 cursor-pointer"
                 >
-                  السابق
-                </Button>
-                {Array.from({ length: totalPages }).map((_, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => handlePageChange(idx + 1)}
-                    className={`w-8 h-8 rounded-lg text-xs font-bold transition-all cursor-pointer ${currentPage === idx + 1
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-transparent text-slate-500 hover:bg-slate-50'
-                      }`}
-                  >
-                    {idx + 1}
-                  </button>
-                ))}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={currentPage === totalPages}
-                  onClick={() => handlePageChange(currentPage + 1)}
-                >
-                  التالي
-                </Button>
+                  <option value={25}>25 حركة</option>
+                  <option value={50}>50 حركة</option>
+                  <option value={100}>100 حركة</option>
+                  <option value={200}>200 حركة</option>
+                </select>
               </div>
             </div>
-          )}
+
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage === 1}
+                onClick={() => handlePageChange(currentPage - 1)}
+              >
+                السابق
+              </Button>
+              <span className="px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 font-black rounded-lg text-xs">
+                صفحة {currentPage} من {Math.max(1, totalPages)}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage >= totalPages || totalPages === 0}
+                onClick={() => handlePageChange(currentPage + 1)}
+              >
+                التالي
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 

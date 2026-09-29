@@ -88,12 +88,14 @@ const getTransferById = async (txnId) => {
           h.node_id       AS nodeId,
           h.created_by    AS createdBy,
           u.username      AS creatorUsername,
+          u.full_name_ar  AS createdByNameAr,
           h.txn_date      AS txnDate,
           h.notes,
           h.status,
           h.confirmed_by  AS confirmedBy,
           h.confirmed_at  AS confirmedAt,
           cu.username     AS confirmerUsername,
+          cu.full_name_ar AS confirmerNameAr,
           h.created_at    AS createdAt,
           d.from_node_id  AS fromNodeId,
           fn.node_name_ar AS fromNodeNameAr,
@@ -132,6 +134,57 @@ const getTransferById = async (txnId) => {
       `);
 
     header.lines = linesResult.recordset.map(TransferLine.fromDatabase);
+
+    // Fetch timeline from audit logs
+    try {
+      const auditResult = await pool.request()
+        .input('txnId', sql.Int, txnId)
+        .query(`
+          SELECT 
+            l.log_id AS logId,
+            l.action,
+            l.new_value AS status,
+            l.user_id AS userId,
+            l.username,
+            u.full_name_ar AS userFullNameAr,
+            l.logged_at AS timestamp
+          FROM ops.audit_logs l
+          LEFT JOIN ops.app_users u ON l.user_id = u.user_id
+          WHERE l.entity_type = 'transfer' AND l.entity_id = @txnId
+          ORDER BY l.log_id ASC
+        `);
+
+      const timeline = auditResult.recordset.map(a => ({
+        status: a.status || a.action,
+        updatedBy: a.userFullNameAr || a.username || `مستخدم #${a.userId}`,
+        timestamp: a.timestamp,
+        notes: a.action
+      }));
+
+      if (timeline.length === 0) {
+        if (header.createdAt) {
+          timeline.push({
+            status: 'draft',
+            updatedBy: rawHeader.createdByNameAr || rawHeader.creatorUsername || 'منشئ المستند',
+            timestamp: header.createdAt,
+            notes: 'إنشاء مسودة الحركة المخزنية'
+          });
+        }
+        if (header.status === 'confirmed' && header.confirmedAt) {
+          timeline.push({
+            status: 'confirmed',
+            updatedBy: rawHeader.confirmerNameAr || rawHeader.confirmerUsername || 'أمين المستودع المستلم',
+            timestamp: header.confirmedAt,
+            notes: 'تأكيد واستلام الحركة'
+          });
+        }
+      }
+
+      header.timeline = timeline;
+    } catch (_) {
+      header.timeline = [];
+    }
+
     return header;
   } catch (err) {
     throw new DatabaseError(`فشل في جلب تفاصيل التحويل: ${err.message}`);
@@ -152,8 +205,13 @@ const getAllTransfers = async (nodeId = null, allowedNodeIds = null) => {
         fn.node_name_ar AS fromNodeNameAr,
         d.to_node_id    AS toNodeId,
         tn.node_name_ar AS toNodeNameAr,
+        h.created_by    AS createdBy,
         u.username      AS creatorUsername,
+        u.full_name_ar  AS createdByNameAr,
+        h.confirmed_by  AS confirmedBy,
         cu.username     AS confirmerUsername,
+        cu.full_name_ar AS confirmerNameAr,
+        h.confirmed_at  AS confirmedAt,
         h.created_at    AS createdAt,
         (SELECT COUNT(1) FROM ops.transaction_lines l WHERE l.txn_id = h.txn_id) AS itemCount
       FROM ops.transaction_headers h
@@ -191,13 +249,24 @@ const updateTransferStatus = async (txnId, status, userId, connection) => {
       .input('status', sql.NVarChar(20), status)
       .input('userId', sql.Int, userId)
       .query(`
+        DECLARE @oldStatus NVARCHAR(20);
+        SELECT @oldStatus = status FROM ops.transaction_headers WHERE txn_id = @txnId;
+
         UPDATE ops.transaction_headers
         SET status = @status,
             confirmed_by = CASE WHEN @status = 'confirmed' THEN @userId ELSE confirmed_by END,
             confirmed_at = CASE WHEN @status = 'confirmed' THEN GETDATE() ELSE confirmed_at END,
             cancelled_by = CASE WHEN @status = 'cancelled' THEN @userId ELSE cancelled_by END,
             cancelled_at = CASE WHEN @status = 'cancelled' THEN GETDATE() ELSE cancelled_at END
-        WHERE txn_id = @txnId
+        WHERE txn_id = @txnId;
+
+        BEGIN TRY
+          INSERT INTO ops.audit_logs (user_id, username, action, entity_type, entity_id, old_value, new_value, logged_at)
+          SELECT @userId, u.username, @status, 'transfer', @txnId, @oldStatus, @status, GETDATE()
+          FROM ops.app_users u WHERE u.user_id = @userId;
+        END TRY
+        BEGIN CATCH
+        END CATCH
       `);
   } catch (err) {
     throw new DatabaseError(`فشل في تحديث حالة التحويل الداخلي: ${err.message}`);

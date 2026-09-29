@@ -36,7 +36,12 @@ export const transferApi = {
       toNodeId: t.toNodeId ? Number(t.toNodeId || t.to_node_id) : null,
       toNodeNameAr: t.toNodeNameAr || t.to_node_name,
       createdBy: t.createdBy || t.created_by || 'أمين المستودع',
-      createdByNameAr: t.createdByNameAr || t.created_by_name || t.createdBy,
+      creatorUsername: t.creatorUsername || t.creator_username,
+      createdByNameAr: t.createdByNameAr || t.created_by_name || t.creatorUsername || (t.createdBy ? `مستخدم #${t.createdBy}` : 'أمين المستودع'),
+      confirmedBy: t.confirmedBy || t.confirmed_by,
+      confirmerUsername: t.confirmerUsername || t.confirmer_username,
+      confirmerNameAr: t.confirmerNameAr || t.confirmer_name || t.confirmerUsername,
+      confirmedAt: t.confirmedAt || t.confirmed_at,
       createdAt: t.createdAt || t.created_at || new Date().toISOString(),
       updatedAt: t.updatedAt || t.updated_at,
       itemCount: Array.isArray(t.lines) && t.lines.length > 0 ? t.lines.length : Number(t.itemCount !== undefined ? t.itemCount : (t.item_count || t.itemsCount || 0)),
@@ -58,7 +63,12 @@ export const transferApi = {
       toNodeId: t.toNodeId ? Number(t.toNodeId || t.to_node_id) : null,
       toNodeNameAr: t.toNodeNameAr || t.to_node_name,
       createdBy: t.createdBy || t.created_by || 'أمين المستودع',
-      createdByNameAr: t.createdByNameAr || t.created_by_name || t.createdBy,
+      creatorUsername: t.creatorUsername || t.creator_username,
+      createdByNameAr: t.createdByNameAr || t.created_by_name || t.creatorUsername || (t.createdBy ? `مستخدم #${t.createdBy}` : 'أمين المستودع'),
+      confirmedBy: t.confirmedBy || t.confirmed_by,
+      confirmerUsername: t.confirmerUsername || t.confirmer_username,
+      confirmerNameAr: t.confirmerNameAr || t.confirmer_name || t.confirmerUsername,
+      confirmedAt: t.confirmedAt || t.confirmed_at,
       createdAt: t.createdAt || t.created_at || new Date().toISOString(),
       updatedAt: t.updatedAt || t.updated_at,
       itemCount: Array.isArray(t.lines) && t.lines.length > 0 ? t.lines.length : Number(t.itemCount !== undefined ? t.itemCount : (t.item_count || t.itemsCount || 0)),
@@ -80,6 +90,11 @@ export const transferApi = {
 
   // POST /transactions/transfers
   createTransferDraft: async (payload: CreateTransferPayload): Promise<{ txnId: number; message: string }> => {
+    const response = await api.post('/transactions/transfers', payload);
+    return response.data;
+  },
+
+  createTransfer: async (payload: any): Promise<any> => {
     const response = await api.post('/transactions/transfers', payload);
     return response.data;
   },

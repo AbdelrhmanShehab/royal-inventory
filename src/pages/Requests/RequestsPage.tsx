@@ -53,7 +53,7 @@ export default function RequestsPage() {
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(50);
 
   // Page Notifications
   const [pageSuccess, setPageSuccess] = useState<string | null>(null);
@@ -223,49 +223,51 @@ export default function RequestsPage() {
         <EmptyState title="لا توجد حركات مخزنية مطابقة" description="لم نجد أي سجلات تحويل مخزني تطابق معايير البحث أو التصفية الحالية." />
       ) : (
         <div className="flex flex-col gap-4">
-          <Card className="border-slate-200/60 overflow-hidden shadow-xs">
+          <Card className="border border-slate-200/80 overflow-hidden shadow-xs rounded-xl">
             <div className="w-full overflow-x-auto">
               <table className="w-full text-right border-collapse select-none">
-                <thead className="bg-slate-50/80 border-b border-slate-100 sticky top-0 text-slate-500 text-xs font-bold">
-                  <tr>
-                    <th className="px-6 py-4">رقم المستند</th>
-                    <th className="px-6 py-4">نوع الحركة</th>
-                    <th className="px-6 py-4">مستودع المصدر (من)</th>
-                    <th className="px-6 py-4">مستودع الوجهة (إلى)</th>
-                    <th className="px-6 py-4">عدد الأصناف</th>
-                    <th className="px-6 py-4">الحالة التشغيلية</th>
-                    <th className="px-6 py-4 text-center">الإجراءات</th>
+                <thead className="bg-slate-100/90 border-b border-slate-200 sticky top-0 text-slate-700 text-xs font-black">
+                  <tr className="divide-x divide-x-reverse divide-slate-200">
+                    <th className="px-5 py-3.5">رقم المستند</th>
+                    <th className="px-5 py-3.5">نوع الحركة</th>
+                    <th className="px-5 py-3.5">مستودع المصدر (من)</th>
+                    <th className="px-5 py-3.5">مستودع الوجهة (إلى)</th>
+                    <th className="px-5 py-3.5">عدد الأصناف</th>
+                    <th className="px-5 py-3.5">الحالة التشغيلية</th>
+                    <th className="px-5 py-3.5 text-center">الإجراءات</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-200 text-xs">
                   {currentTransfers.map((item) => {
                     const statusInfo = statusLabels[item.status] || { text: item.status, variant: 'neutral' };
                     return (
                       <tr 
                         key={item.id}
                         onClick={() => setSelectedTransferId(item.id)}
-                        className="hover:bg-slate-50/60 cursor-pointer transition-colors duration-150"
+                        className="odd:bg-white even:bg-slate-50/50 hover:bg-blue-50/60 cursor-pointer transition-colors duration-150 divide-x divide-x-reverse divide-slate-200/80"
                       >
-                        <td className="px-6 py-4 text-xs font-mono font-extrabold text-blue-700">
+                        <td className="px-5 py-3.5 font-mono font-extrabold text-blue-700 bg-slate-50/30">
                           #{item.id}
                         </td>
-                        <td className="px-6 py-4 text-xs font-bold text-slate-800">
+                        <td className="px-5 py-3.5 font-bold text-slate-800">
                           {txnTypeLabels[item.txnType] || item.txnType}
                         </td>
-                        <td className="px-6 py-4 text-xs font-semibold text-slate-700 flex items-center gap-1.5 mt-2">
-                          <Building2 size={13} className="text-slate-400" />
-                          <span>{item.fromNodeNameAr || `مستودع #${item.fromNodeId}`}</span>
+                        <td className="px-5 py-3.5 font-semibold text-slate-700">
+                          <div className="flex items-center gap-1.5">
+                            <Building2 size={13} className="text-slate-400" />
+                            <span>{item.fromNodeNameAr || `مستودع #${item.fromNodeId}`}</span>
+                          </div>
                         </td>
-                        <td className="px-6 py-4 text-xs font-semibold text-slate-700">
+                        <td className="px-5 py-3.5 font-semibold text-slate-700">
                           {item.toNodeNameAr || (item.toNodeId ? `مستودع #${item.toNodeId}` : '—')}
                         </td>
-                        <td className="px-6 py-4 text-xs font-bold text-slate-600 font-mono">
+                        <td className="px-5 py-3.5 font-bold text-slate-700 font-mono">
                           {item.lines?.length || 0} صنف
                         </td>
-                        <td className="px-6 py-4 text-xs">
+                        <td className="px-5 py-3.5">
                           <Badge variant={statusInfo.variant}>{statusInfo.text}</Badge>
                         </td>
-                        <td className="px-6 py-4 text-center">
+                        <td className="px-5 py-3.5 text-center">
                           <button 
                             onClick={(e) => { e.stopPropagation(); setSelectedTransferId(item.id); }}
                             className="px-3 py-1.5 bg-slate-50 border border-slate-200 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700 rounded-lg text-xs font-bold text-slate-600 transition-all flex items-center gap-1 mx-auto cursor-pointer"
@@ -282,45 +284,52 @@ export default function RequestsPage() {
             </div>
           </Card>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex justify-between items-center bg-white border border-slate-200/80 px-6 py-3.5 rounded-xl shadow-xs select-none">
-              <span className="text-xs text-slate-400 font-bold">
-                عرض {indexOfFirstItem + 1} - {Math.min(indexOfLastItem, filteredTransfers.length)} من أصل {filteredTransfers.length} مستند
+          {/* Clean Pagination Controls */}
+          <div className="flex flex-col sm:flex-row justify-between items-center bg-white border border-slate-200/80 px-6 py-3.5 rounded-xl shadow-xs select-none gap-3">
+            <div className="flex items-center gap-4 text-xs">
+              <span className="text-slate-500 font-bold">
+                عرض {filteredTransfers.length === 0 ? 0 : indexOfFirstItem + 1} - {Math.min(indexOfLastItem, filteredTransfers.length)} من أصل {filteredTransfers.length} مستند
               </span>
-              <div className="flex gap-1">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  disabled={currentPage === 1}
-                  onClick={() => setCurrentPage(prev => prev - 1)}
+              <div className="flex items-center gap-1.5 text-slate-500 font-semibold">
+                <span>عرض بالصفحة:</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => {
+                    setItemsPerPage(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-bold text-slate-700 focus:outline-none focus:border-blue-500 cursor-pointer"
                 >
-                  السابق
-                </Button>
-                {Array.from({ length: totalPages }).map((_, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setCurrentPage(idx + 1)}
-                    className={`w-8 h-8 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      currentPage === idx + 1 
-                        ? 'bg-blue-600 text-white' 
-                        : 'bg-transparent text-slate-500 hover:bg-slate-50'
-                    }`}
-                  >
-                    {idx + 1}
-                  </button>
-                ))}
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  disabled={currentPage === totalPages}
-                  onClick={() => setCurrentPage(prev => prev + 1)}
-                >
-                  التالي
-                </Button>
+                  <option value={25}>25 مستند</option>
+                  <option value={50}>50 مستند</option>
+                  <option value={100}>100 مستند</option>
+                  <option value={200}>200 مستند</option>
+                </select>
               </div>
             </div>
-          )}
+
+            <div className="flex items-center gap-1.5">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(prev => prev - 1)}
+              >
+                السابق
+              </Button>
+              <span className="px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 font-black rounded-lg text-xs">
+                صفحة {currentPage} من {Math.max(1, totalPages)}
+              </span>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                disabled={currentPage >= totalPages || totalPages === 0}
+                onClick={() => setCurrentPage(prev => prev + 1)}
+              >
+                التالي
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 

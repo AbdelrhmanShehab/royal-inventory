@@ -32,22 +32,33 @@ const buildMssqlConfig = (dbConfig) => ({
   },
 });
 
+let isConnecting = false;
+
 const connectZkDB = async () => {
-  if (zkPool) return zkPool;
+  if (zkPool && zkPool.connected) return zkPool;
+  if (isConnecting) return null;
 
+  isConnecting = true;
   try {
-    zkPool = new sql.ConnectionPool(buildMssqlConfig(config.zkDb));
-    await zkPool.connect();
+    if (zkPool) {
+      try { await zkPool.close(); } catch (_) {}
+      zkPool = null;
+    }
 
-    zkPool.on('error', (err) => {
+    const pool = new sql.ConnectionPool(buildMssqlConfig(config.zkDb));
+    await pool.connect();
+
+    pool.on('error', (err) => {
       logger.error('[ZkDB] Pool error', { error: err.message });
+      zkPool = null;
     });
 
-    logger.info('[ZkDB] Connected', {
+    logger.info('[ZkDB] Connected successfully ✅', {
       server: config.zkDb.server,
       database: config.zkDb.database,
     });
 
+    zkPool = pool;
     return zkPool;
   } catch (err) {
     logger.warn('[ZkDB] Connection failed — ZK operations will be unavailable', {
@@ -56,12 +67,15 @@ const connectZkDB = async () => {
     });
     zkPool = null;
     return null;
+  } finally {
+    isConnecting = false;
   }
 };
 
 const getZkDB = () => {
-  if (!zkPool) {
-    logger.warn('[ZkDB] Pool not available — ZK DB unreachable');
+  if (!zkPool || !zkPool.connected) {
+    // Proactively trigger reconnect in background
+    connectZkDB().catch(() => {});
     return null;
   }
   return zkPool;

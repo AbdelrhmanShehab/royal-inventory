@@ -225,9 +225,25 @@ const getLaundryStock = asyncHandler(async (req, res) => {
 // ─── 10. ZK FINGERPRINT HANDOVER & CUSTODY ─────────────────────────────────────
 
 const getLatestZkCheckins = asyncHandler(async (req, res) => {
-  const limit = req.query.limit ? parseInt(req.query.limit) : 10;
+  const limit = req.query.limit ? parseInt(req.query.limit) : 50;
   const result = await service.getLatestZkCheckins(limit);
   return R.success(res, result, 'تم جلب آخر عمليات البصمة بنجاح');
+});
+
+const getZkTransactions = asyncHandler(async (req, res) => {
+  const { limit, action, search } = req.query;
+  const result = await service.getZkTransactions({
+    limit: limit ? parseInt(limit) : 100,
+    action,
+    search,
+  });
+  return R.success(res, result, 'تم جلب سجل المعاملات بنجاح');
+});
+
+const getZkEmployees = asyncHandler(async (req, res) => {
+  const { search, limit } = req.query;
+  const result = await service.getZkEmployees(search, limit);
+  return R.success(res, result, 'تم جلب قائمة الموظفين بنجاح');
 });
 
 const getZkEmployeeDetails = asyncHandler(async (req, res) => {
@@ -293,6 +309,8 @@ module.exports = {
   classifyChemical,
   getLaundryStock,
   getLatestZkCheckins,
+  getZkTransactions,
+  getZkEmployees,
   getZkEmployeeDetails,
   createZkHandoverTxn,
   getZkHandoverDashboard,

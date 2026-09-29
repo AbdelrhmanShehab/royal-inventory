@@ -35,8 +35,8 @@ const envSchema = Joi.object({
 
   // JWT
   JWT_ACCESS_SECRET: Joi.string().min(32).required(),
-  JWT_REFRESH_SECRET: Joi.string().min(32).required(),
-  JWT_ACCESS_EXPIRES: Joi.string().default('15m'),
+  JWT_REFRESH_SECRET: Joi.string().min(32).optional().allow(''),
+  JWT_ACCESS_EXPIRES: Joi.string().default('7d'),
   JWT_REFRESH_EXPIRES: Joi.string().default('7d'),
 
   // Encryption
