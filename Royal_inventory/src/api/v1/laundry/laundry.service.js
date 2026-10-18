@@ -1488,6 +1488,9 @@ const getUnifiedDashboardSummary = async (startDate, endDate) => {
   };
 };
 
+const getInLaundryInventory = async (filters = {}) => {
+  return await zkRepo.getInLaundryInventory(filters);
+};
 
 module.exports = {
   createMachine,
@@ -1535,4 +1538,5 @@ module.exports = {
   recordZkHandoverReceive,
   getZkHandoverDashboard,
   getUnifiedDashboardSummary,
+  getInLaundryInventory,
 };

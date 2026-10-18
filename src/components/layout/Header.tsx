@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
-import { Bell, LogOut, PackageCheck, ArrowRightLeft, X } from 'lucide-react';
+import { Bell, LogOut, PackageCheck, ArrowRightLeft, X, Menu, PanelRightClose } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ROUTES } from '../../utils/constants';
 import { useAuth } from '../../context/AuthContext';
 import { useWarehouseScope } from '../../hooks/useWarehouseScope';
 import { useTransfersList } from '../../features/transfer/hooks/useTransfers';
+import { useSidebar } from '../../context/SidebarContext';
 
 export const Header: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { currentNodeName, currentNodeId, isGlobalAdmin } = useWarehouseScope();
+  const { isOpen, toggleSidebar } = useSidebar();
   const [isNotifOpen, setIsNotifOpen] = useState(false);
 
   // Fetch transfers list to compute active notifications
@@ -104,8 +106,19 @@ export const Header: React.FC = () => {
 
   return (
     <header className="sticky top-0 z-40 h-[70px] bg-white/95 backdrop-blur-xs border-b border-slate-200/80 flex items-center justify-between px-6 lg:px-8 flex-shrink-0 select-none">
-      {/* Right side - Breadcrumbs & Current Warehouse Badge */}
-      <div className="flex items-center gap-4">
+      {/* Right side - Sidebar toggle, Breadcrumbs & Current Warehouse Badge */}
+      <div className="flex items-center gap-3.5">
+        {/* Sidebar Toggle Button */}
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50/80 rounded-xl transition-all duration-200 cursor-pointer flex items-center justify-center shrink-0 border border-slate-200/80 shadow-2xs hover:border-blue-200 active:scale-95"
+          title={isOpen ? "إخفاء القائمة الجانبية (Ctrl+B)" : "إظهار القائمة الجانبية (Ctrl+B)"}
+          aria-label={isOpen ? "إخفاء القائمة الجانبية" : "إظهار القائمة الجانبية"}
+        >
+          {isOpen ? <PanelRightClose size={20} /> : <Menu size={20} />}
+        </button>
+
         <div className="flex items-center gap-2">
           <span className="text-xs text-slate-400 font-medium">الرئيسية</span>
           <span className="text-slate-300">/</span>

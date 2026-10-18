@@ -263,7 +263,7 @@ export const UniformDashboard: React.FC = () => {
                     <th className="py-2.5 px-3">Action</th>
                     <th className="py-2.5 px-3">Employee</th>
                     <th className="py-2.5 px-3">Item</th>
-                    <th className="py-2.5 px-3 text-center">الإجراء</th>
+                    <th className="py-2.5 px-3 text-center">الكمية</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -300,14 +300,8 @@ export const UniformDashboard: React.FC = () => {
                           <td className="py-2.5 px-3 font-semibold text-slate-700">
                             {txn.itemName}
                           </td>
-                          <td className="py-2.5 px-3 text-center">
-                            <button
-                              onClick={() => navigate(`/laundry/handover?userCode=${txn.userCode}`)}
-                              className="text-[11px] text-blue-600 hover:text-blue-800 font-bold p-1 hover:bg-blue-50 rounded"
-                              title="فتح بطاقة عهدة الموظف"
-                            >
-                              عهدة
-                            </button>
+                          <td className="py-2.5 px-3 text-center font-bold font-mono text-slate-800">
+                            {txn.quantity || 1}
                           </td>
                         </tr>
                       );
@@ -447,12 +441,10 @@ export const UniformDashboard: React.FC = () => {
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => navigate(`/laundry/handover?userCode=${code}`)}
-                    className="text-[11px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-lg transition-colors whitespace-nowrap"
-                  >
-                    تسليم / استلام
-                  </button>
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg flex items-center gap-1 whitespace-nowrap">
+                    <Fingerprint size={12} className="text-emerald-600" />
+                    بصمة حضور
+                  </span>
                 </div>
               );
             })

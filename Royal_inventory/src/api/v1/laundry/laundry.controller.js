@@ -270,6 +270,12 @@ const getUnifiedDashboardSummary = asyncHandler(async (req, res) => {
   return R.success(res, result, 'تم جلب تقرير أداء لوحة تحكم المغسلة الموحد بنجاح');
 });
 
+const getInLaundryInventory = asyncHandler(async (req, res) => {
+  const { department, itemName, search } = req.query;
+  const result = await service.getInLaundryInventory({ department, itemName, search });
+  return R.success(res, result, 'تم جلب تقرير موجودات المغسلة الحالية بنجاح');
+});
+
 module.exports = {
   createMachine,
   getMachines,
@@ -315,4 +321,5 @@ module.exports = {
   createZkHandoverTxn,
   getZkHandoverDashboard,
   getUnifiedDashboardSummary,
+  getInLaundryInventory,
 };

@@ -4,13 +4,13 @@ import {
   History, 
   Search, 
   RotateCw, 
-  ArrowUpRight, 
   Download, 
   Printer, 
   ArrowDownLeft,
   ArrowUpRight as ArrowUpRightIcon,
   Shirt,
-  Layers
+  Layers,
+  Fingerprint
 } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -264,7 +264,7 @@ export const HandoverReportPage: React.FC = () => {
                   <th className="py-3 px-4">التاريخ والوقت</th>
                   <th className="py-3 px-4">المسؤول</th>
                   <th className="py-3 px-4">ملاحظات</th>
-                  <th className="py-3 px-4 text-center">الإجراء</th>
+                  <th className="py-3 px-4 text-center">التوثيق</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -318,15 +318,10 @@ export const HandoverReportPage: React.FC = () => {
                         {t.notes || '---'}
                       </td>
                       <td className="py-3 px-4 text-center">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => navigate(`/laundry/handover?userCode=${t.userCode}`)}
-                          className="text-blue-600 hover:bg-blue-50 border border-blue-200 text-xs py-1 px-2"
-                        >
-                          <ArrowUpRight size={13} className="ml-1" />
-                          بطاقة العهدة
-                        </Button>
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <Fingerprint size={12} className="text-emerald-600" />
+                          بصمة بيومترية
+                        </span>
                       </td>
                     </tr>
                   );

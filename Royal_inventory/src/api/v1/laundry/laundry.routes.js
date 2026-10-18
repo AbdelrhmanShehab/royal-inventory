@@ -89,5 +89,6 @@ router.get('/zk/employees', controller.getZkEmployees);
 router.get('/zk/employee/:userCode', controller.getZkEmployeeDetails);
 router.post('/zk/transactions', authorize('admin', 'manager', 'warehouse_manager', 'warehouse_head', 'laundry_supervisor', 'uniform_clerk'), validate(createHandoverTxnSchema), controller.createZkHandoverTxn);
 router.get('/zk/dashboard', controller.getZkHandoverDashboard);
+router.get('/zk/in-laundry-inventory', controller.getInLaundryInventory);
 
 module.exports = router;

@@ -165,6 +165,9 @@ export const laundryApi = {
   getZkDashboard: async (): Promise<any> => {
     return api.get('/laundry/zk/dashboard').then(res => res.data);
   },
+  getInLaundryInventory: async (params?: { department?: string; itemName?: string; search?: string }): Promise<any> => {
+    return api.get('/laundry/zk/in-laundry-inventory', { params }).then(res => res.data);
+  },
 };
 
 export default laundryApi;

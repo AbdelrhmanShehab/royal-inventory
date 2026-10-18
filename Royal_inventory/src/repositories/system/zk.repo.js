@@ -80,6 +80,7 @@ const getEmployeeDetails = async (userCode) => {
           i.ItemName AS itemName,
           ui.ItemCode AS itemCode,
           ui.AssignedDate AS assignedDate,
+          lastTxn.TransactionType AS lastAction,
           COALESCE((
             SELECT COUNT(*)
             FROM dbo.ItemTransactions t
@@ -94,7 +95,14 @@ const getEmployeeDetails = async (userCode) => {
           ), 0) AS receivedQty
         FROM dbo.UserItems ui
         JOIN dbo.Items i ON ui.ItemID = i.ItemID
+        OUTER APPLY (
+          SELECT TOP 1 t.TransactionType
+          FROM dbo.ItemTransactions t
+          WHERE t.UserItemID = ui.UserItemID
+          ORDER BY t.TransactionDate DESC, t.TransactionID DESC
+        ) lastTxn
         WHERE ui.UserID = @userId
+        ORDER BY ui.UserItemID ASC
       `);
 
     // 3. Fetch Transaction History for this Employee
@@ -123,16 +131,21 @@ const getEmployeeDetails = async (userCode) => {
         title: employee.title,
         department: employee.department
       },
-      custody: custodyResult.recordset.map(row => ({
-        userItemId: row.userItemId,
-        itemId: row.itemId,
-        itemName: row.itemName,
-        itemCode: row.itemCode,
-        assignedDate: row.assignedDate,
-        handedOverQty: row.handedOverQty,
-        receivedQty: row.receivedQty,
-        pendingQty: row.handedOverQty - row.receivedQty
-      })),
+      custody: custodyResult.recordset.map(row => {
+        const isInLaundry = row.lastAction === 'Receive';
+        return {
+          userItemId: row.userItemId,
+          itemId: row.itemId,
+          itemName: row.itemName,
+          itemCode: row.itemCode,
+          assignedDate: row.assignedDate,
+          handedOverQty: row.handedOverQty,
+          receivedQty: row.receivedQty,
+          lastAction: row.lastAction,
+          isInLaundry,
+          pendingQty: isInLaundry ? 1 : 0
+        };
+      }),
       history: historyResult.recordset
     };
   } catch (err) {
@@ -155,7 +168,7 @@ const createHandoverReceiveTxn = async ({ userCode, itemCode, action, quantity =
     }
     const userId = empResult.recordset[0].USERID;
 
-    // 2. Find UserItem custody assignment
+    // 2. Find UserItem custody assignment (ordered by UserItemID for consistency)
     const custodyResult = await transaction.request()
       .input('userId', sql.Int, userId)
       .input('itemCode', sql.NVarChar(50), itemCode)
@@ -164,12 +177,32 @@ const createHandoverReceiveTxn = async ({ userCode, itemCode, action, quantity =
         FROM dbo.UserItems ui
         JOIN dbo.Items i ON ui.ItemID = i.ItemID
         WHERE ui.UserID = @userId AND (ui.ItemCode = @itemCode OR i.ItemName = @itemCode)
+        ORDER BY ui.UserItemID ASC
       `);
 
     if (custodyResult.recordset.length === 0) {
       throw new AppError('هذا الصنف غير مخصص كعهدة لهذا الموظف في نظام البصمة', 404, 'CUSTODY_NOT_ASSIGNED');
     }
     const userItemId = custodyResult.recordset[0].UserItemID;
+
+    // 3. Guard against duplicate transactions within 30 seconds (prevents double-click / retry issues)
+    const dupCheck = await transaction.request()
+      .input('dupUserItemId', sql.Int, userItemId)
+      .input('dupAction', sql.NVarChar(20), action)
+      .query(`
+        SELECT TOP 1 TransactionID 
+        FROM dbo.ItemTransactions
+        WHERE UserItemID = @dupUserItemId
+          AND TransactionType = @dupAction
+          AND TransactionDate >= DATEADD(second, -30, GETDATE())
+      `);
+    if (dupCheck.recordset.length > 0) {
+      throw new AppError(
+        `تم تسجيل نفس العملية (${action}) على هذا الصنف خلال آخر 30 ثانية — منع التكرار تلقائياً`,
+        409,
+        'DUPLICATE_TRANSACTION'
+      );
+    }
 
     // 3. Insert transaction(s)
     let lastTxnId = null;
@@ -208,7 +241,7 @@ const getDashboardStats = async () => {
     `);
 
     const { totalHandovers, totalReceives } = statsResult.recordset[0];
-    const totalPending = totalHandovers - totalReceives;
+    const totalPending = Math.max(0, totalReceives - totalHandovers);
 
     return {
       totalHandovers,
@@ -405,6 +438,117 @@ const getAllItems = async () => {
   }
 };
 
+// Get all items currently in the laundry (where the latest transaction is 'Receive')
+const getInLaundryInventory = async (filters = {}) => {
+  try {
+    const pool = checkZkConnection();
+    let query = `
+      SELECT 
+        ui.UserItemID AS userItemId,
+        ui.ItemCode AS itemCode,
+        i.ItemName AS itemName,
+        u.BADGENUMBER AS userCode,
+        u.NAME AS employeeName,
+        u.TITLE AS jobTitle,
+        COALESCE(d.DEPTNAME, N'غير محدد') AS department,
+        lastTxn.TransactionID AS txnId,
+        lastTxn.TransactionType AS lastAction,
+        lastTxn.TransactionDate AS receivedDate,
+        lastTxn.HandledBy AS handledBy,
+        lastTxn.Notes AS notes,
+        DATEDIFF(HOUR, lastTxn.TransactionDate, GETDATE()) AS hoursInLaundry,
+        DATEDIFF(DAY, lastTxn.TransactionDate, GETDATE()) AS daysInLaundry
+      FROM dbo.UserItems ui
+      INNER JOIN dbo.Items i ON ui.ItemID = i.ItemID
+      INNER JOIN dbo.USERINFO u ON ui.UserID = u.USERID
+      LEFT JOIN dbo.DEPARTMENTS d ON u.DEFAULTDEPTID = d.DEPTID
+      CROSS APPLY (
+        SELECT TOP 1 t.TransactionID, t.TransactionType, t.TransactionDate, t.HandledBy, t.Notes
+        FROM dbo.ItemTransactions t
+        WHERE t.UserItemID = ui.UserItemID
+        ORDER BY t.TransactionDate DESC, t.TransactionID DESC
+      ) lastTxn
+      WHERE lastTxn.TransactionType = 'Receive'
+    `;
+
+    const request = pool.request();
+
+    if (filters.department) {
+      query += ` AND d.DEPTNAME = @department`;
+      request.input('department', sql.NVarChar(100), filters.department);
+    }
+
+    if (filters.itemName) {
+      query += ` AND i.ItemName = @itemName`;
+      request.input('itemName', sql.NVarChar(100), filters.itemName);
+    }
+
+    if (filters.search) {
+      query += ` AND (u.BADGENUMBER LIKE @search OR u.NAME LIKE @search OR ui.ItemCode LIKE @search OR i.ItemName LIKE @search)`;
+      request.input('search', sql.NVarChar(100), `%${filters.search}%`);
+    }
+
+    query += ` ORDER BY lastTxn.TransactionDate DESC`;
+
+    const result = await request.query(query);
+    const items = result.recordset;
+
+    // Aggregations
+    const itemBreakdown = {};
+    const departmentBreakdown = {};
+    const employeesSet = new Set();
+    let delayedOver24h = 0;
+    let delayedOver48h = 0;
+    let receivedToday = 0;
+
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    items.forEach(row => {
+      employeesSet.add(row.userCode);
+      itemBreakdown[row.itemName] = (itemBreakdown[row.itemName] || 0) + 1;
+      departmentBreakdown[row.department] = (departmentBreakdown[row.department] || 0) + 1;
+
+      if (row.hoursInLaundry >= 48) delayedOver48h++;
+      if (row.hoursInLaundry >= 24) delayedOver24h++;
+
+      const rDateStr = row.receivedDate ? new Date(row.receivedDate).toISOString().split('T')[0] : '';
+      if (rDateStr === todayStr) receivedToday++;
+    });
+
+    const byItem = Object.entries(itemBreakdown)
+      .map(([name, count]) => ({
+        name,
+        count,
+        percentage: items.length > 0 ? Number(((count / items.length) * 100).toFixed(1)) : 0
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    const byDepartment = Object.entries(departmentBreakdown)
+      .map(([name, count]) => ({
+        name,
+        count,
+        percentage: items.length > 0 ? Number(((count / items.length) * 100).toFixed(1)) : 0
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    return {
+      summary: {
+        totalItems: items.length,
+        totalEmployees: employeesSet.size,
+        receivedToday,
+        delayedOver24h,
+        delayedOver48h
+      },
+      byItem,
+      byDepartment,
+      items
+    };
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError(`فشل في جلب تقرير موجودات المغسلة: ${err.message}`);
+  }
+};
+
 module.exports = {
   getLatestCheckins,
   getEmployeeDetails,
@@ -415,5 +559,6 @@ module.exports = {
   getTransactionHistory,
   searchEmployees,
   getZkDashboardSummaryToday,
-  getAllItems
+  getAllItems,
+  getInLaundryInventory
 };

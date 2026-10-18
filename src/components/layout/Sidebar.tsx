@@ -18,15 +18,24 @@ import {
   Fingerprint,
   History,
   UserCheck,
-  Receipt
+  Receipt,
+  Layers
 } from 'lucide-react';
 import { ROUTES } from '../../utils/constants';
 import { useAuth } from '../../context/AuthContext';
+import { useSidebar } from '../../context/SidebarContext';
 
 export const Sidebar: React.FC = () => {
   const { hasPermission } = useAuth();
+  const { isOpen, closeSidebar, isMobile } = useSidebar();
   const location = useLocation();
   const isLaundryMode = location.pathname.startsWith('/laundry');
+
+  const handleNavClick = () => {
+    if (isMobile) {
+      closeSidebar();
+    }
+  };
 
   const warehouseMenuItems = [
     { name: 'لوحة التحكم', path: ROUTES.DASHBOARD, icon: LayoutDashboard },
@@ -43,6 +52,7 @@ export const Sidebar: React.FC = () => {
     { name: 'لوحة تحكم التشغيل (المغسلة)', path: '/laundry', icon: LayoutDashboard, permission: 'view_laundry' },
     { name: 'لوحة تحكم عهد اليونيفورم', path: '/laundry/uniform-dashboard', icon: Shirt, permission: 'manage_laundry_uniforms' },
     { name: 'تسليم واستلام العهد (Handover)', path: '/laundry/handover', icon: UserCheck, permission: 'manage_laundry_uniforms' },
+    { name: 'موجودات المغسلة الآن (الجرد)', path: '/laundry/in-laundry-report', icon: Layers, permission: 'manage_laundry_uniforms' },
     { name: 'تقرير سجل البصمات (حضور)', path: '/laundry/fingerprint-report', icon: Fingerprint, permission: 'view_laundry_fingerprint' },
     { name: 'تقرير حركات العهد (العمليات)', path: '/laundry/handover-report', icon: History, permission: 'manage_laundry_uniforms' },
     { name: 'دورات الغسيل التشغيلية', path: '/laundry/batches', icon: Activity, permission: 'manage_laundry_batches' },
@@ -61,79 +71,96 @@ export const Sidebar: React.FC = () => {
   });
 
   return (
-    <aside className="w-[260px] h-full bg-white border-l border-slate-200/80 flex flex-col flex-shrink-0 z-30 select-none">
-      {/* Brand Header */}
-      <div className="h-[70px] border-b border-slate-100 flex items-center px-5 gap-3">
-        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white font-black text-sm shadow-md shadow-blue-500/20 tracking-wider">
-          RRI
-        </div>
-        <div className="flex flex-col text-right">
-          <span className="text-xs font-black text-slate-800 tracking-tight leading-snug">Royal Resort Inventories</span>
-          <span className="text-[9px] text-slate-400 font-semibold mt-0.5">نظام تشغيل المخازن والمغسلة</span>
-        </div>
-      </div>
-
-      {/* Switcher Banner */}
-      <div className="px-4 pt-4">
-        <NavLink
-          to={isLaundryMode ? '/' : '/laundry'}
-          className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all duration-200 shadow-2xs hover:shadow-xs group ${
-            isLaundryMode 
-              ? 'bg-blue-50 border-blue-200/60 hover:bg-blue-100/50' 
-              : 'bg-slate-50 border-slate-200/85 hover:bg-blue-50/50 hover:border-blue-200'
-          }`}
-        >
-          <div className="flex items-center gap-2.5">
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center border transition-colors ${
-              isLaundryMode 
-                ? 'bg-blue-600 text-white border-transparent' 
-                : 'bg-white text-slate-450 border-slate-200 group-hover:bg-blue-50 group-hover:text-blue-600'
-            }`}>
-              <WashingMachine size={16} className={isLaundryMode ? 'animate-spin-slow' : ''} />
-            </div>
-            <div className="flex flex-col text-right">
-              <span className="text-xs font-bold text-slate-800 leading-none">
-                {isLaundryMode ? 'تشغيل المغسلة الكيميائية' : 'التحول للتشغيل الفني'}
-              </span>
-              <span className="text-[9px] text-slate-400 font-semibold mt-1">
-                {isLaundryMode ? 'العودة للمخازن والمستودعات' : 'بوابة المغاسلات والمعدات'}
-              </span>
-            </div>
+    <aside
+      className={`h-full bg-white flex flex-col flex-shrink-0 z-45 select-none transition-all duration-300 ease-in-out ${
+        isMobile
+          ? `fixed inset-y-0 right-0 z-50 w-[260px] shadow-2xl border-l border-slate-200 transform ${
+              isOpen ? 'translate-x-0' : 'translate-x-full'
+            }`
+          : `relative ${
+              isOpen
+                ? 'w-[260px] border-l border-slate-200/80 opacity-100'
+                : 'w-0 border-none opacity-0 pointer-events-none'
+            } overflow-hidden`
+      }`}
+    >
+      <div className="w-[260px] h-full flex flex-col flex-shrink-0">
+        {/* Brand Header */}
+        <div className="h-[70px] border-b border-slate-100 flex items-center px-5 gap-3">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white font-black text-sm shadow-md shadow-blue-500/20 tracking-wider">
+            RRI
           </div>
-          <ArrowLeftRight size={13} className="text-slate-400 group-hover:text-blue-600 transition-colors" />
-        </NavLink>
-      </div>
+          <div className="flex flex-col text-right">
+            <span className="text-xs font-black text-slate-800 tracking-tight leading-snug">Royal Resort Inventories</span>
+            <span className="text-[9px] text-slate-400 font-semibold mt-0.5">نظام تشغيل المخازن والمغسلة</span>
+          </div>
+        </div>
 
-      {/* Navigation List */}
-      <nav className="flex-1 px-4 py-6 flex flex-col gap-1 overflow-y-auto">
-        {filteredMenuItems.map((item) => {
-          const isTransferRoute = item.path === ROUTES.REQUESTS && (location.pathname === ROUTES.REQUESTS || location.pathname.startsWith('/transfers'));
-          return (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              end={item.path === '/laundry' || item.path === '/'}
-              className={({ isActive }) => `
-                flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group cursor-pointer
-                ${(isActive || isTransferRoute) 
-                  ? 'bg-blue-50 text-blue-600 font-bold border-r-4 border-blue-600 rounded-r-none' 
-                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}
-              `}
-            >
-              <item.icon size={18} className="transition-transform group-hover:scale-105" />
-              <span>{item.name}</span>
-            </NavLink>
-          );
-        })}
-      </nav>
+        {/* Switcher Banner */}
+        <div className="px-4 pt-4">
+          <NavLink
+            to={isLaundryMode ? '/' : '/laundry'}
+            onClick={handleNavClick}
+            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all duration-200 shadow-2xs hover:shadow-xs group ${
+              isLaundryMode 
+                ? 'bg-blue-50 border-blue-200/60 hover:bg-blue-100/50' 
+                : 'bg-slate-50 border-slate-200/85 hover:bg-blue-50/50 hover:border-blue-200'
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center border transition-colors ${
+                isLaundryMode 
+                  ? 'bg-blue-600 text-white border-transparent' 
+                  : 'bg-white text-slate-450 border-slate-200 group-hover:bg-blue-50 group-hover:text-blue-600'
+              }`}>
+                <WashingMachine size={16} className={isLaundryMode ? 'animate-spin-slow' : ''} />
+              </div>
+              <div className="flex flex-col text-right">
+                <span className="text-xs font-bold text-slate-800 leading-none">
+                  {isLaundryMode ? 'تشغيل المغسلة الكيميائية' : 'التحول للتشغيل الفني'}
+                </span>
+                <span className="text-[9px] text-slate-400 font-semibold mt-1">
+                  {isLaundryMode ? 'العودة للمخازن والمستودعات' : 'بوابة المغاسلات والمعدات'}
+                </span>
+              </div>
+            </div>
+            <ArrowLeftRight size={13} className="text-slate-400 group-hover:text-blue-600 transition-colors" />
+          </NavLink>
+        </div>
 
-      {/* Bottom info */}
-      <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex flex-col gap-1 text-right">
-        <span className="text-[10px] text-slate-400 font-bold">بوابة المستودعات والمنافذ v4.0</span>
-        <span className="text-[9px] text-slate-300 font-semibold">عزل تلقائي للمستودع (Global Isolation)</span>
+        {/* Navigation List */}
+        <nav className="flex-1 px-4 py-6 flex flex-col gap-1 overflow-y-auto">
+          {filteredMenuItems.map((item) => {
+            const isTransferRoute = item.path === ROUTES.REQUESTS && (location.pathname === ROUTES.REQUESTS || location.pathname.startsWith('/transfers'));
+            return (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                onClick={handleNavClick}
+                end={item.path === '/laundry' || item.path === '/'}
+                className={({ isActive }) => `
+                  flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group cursor-pointer
+                  ${(isActive || isTransferRoute) 
+                    ? 'bg-blue-50 text-blue-600 font-bold border-r-4 border-blue-600 rounded-r-none' 
+                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}
+                `}
+              >
+                <item.icon size={18} className="transition-transform group-hover:scale-105" />
+                <span>{item.name}</span>
+              </NavLink>
+            );
+          })}
+        </nav>
+
+        {/* Bottom info */}
+        <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex flex-col gap-1 text-right">
+          <span className="text-[10px] text-slate-400 font-bold">بوابة المستودعات والمنافذ v4.0</span>
+          <span className="text-[9px] text-slate-300 font-semibold">عزل تلقائي للمستودع (Global Isolation)</span>
+        </div>
       </div>
     </aside>
   );
 };
 
 export default Sidebar;
+
