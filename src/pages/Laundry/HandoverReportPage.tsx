@@ -21,6 +21,7 @@ import { laundryApi } from '../../api/laundry.api';
 
 interface HandoverTransaction {
   txnId: number;
+  userId: number;
   userCode: string;
   employeeName: string;
   itemCode: string;
@@ -72,9 +73,10 @@ export const HandoverReportPage: React.FC = () => {
   const totalReceive = transactions.filter(t => t.action === 'Receive').length;
 
   const exportCSV = () => {
-    const headers = ['رقم الحركة', 'كود الموظف', 'اسم الموظف', 'كود الصنف', 'اسم الصنف', 'نوع الحركة', 'الكمية', 'التاريخ والوقت', 'المسؤول', 'ملاحظات'];
+    const headers = ['رقم الحركة', 'معرف الموظف الدائم', 'كود الموظف', 'اسم الموظف', 'كود الصنف', 'اسم الصنف', 'نوع الحركة', 'الكمية', 'التاريخ والوقت', 'المسؤول', 'ملاحظات'];
     const rows = filteredTxns.map(t => [
       t.txnId,
+      t.userId,
       t.userCode || '---',
       t.employeeName || '---',
       t.itemCode || '---',
@@ -293,7 +295,7 @@ export const HandoverReportPage: React.FC = () => {
                       </td>
                       <td className="py-3 px-4">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 font-mono font-bold text-slate-800 text-[11px]">
-                          {t.userCode || '---'}
+                          {t.userCode || '---'} · ID: {t.userId}
                         </span>
                       </td>
                       <td className="py-3 px-4 font-bold text-slate-800">

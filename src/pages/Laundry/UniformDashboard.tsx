@@ -23,6 +23,7 @@ interface DashboardStats {
 
 interface RecentTxn {
   txnId: number;
+  userId: number;
   userCode: string;
   employeeName: string;
   itemCode: string;

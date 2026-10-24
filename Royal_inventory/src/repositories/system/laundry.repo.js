@@ -768,7 +768,7 @@ const getLosses = async () => {
 
 // ─── 9. TICKETS (Guest & Staff) ───────────────────────────────────────────────
 
-const createTicket = async ({ ticketType, guestName = null, roomNumber = null, employeeId = null, specialNotes = null, deliveryTime = null, status = 'Received', posSaleId = null, createdBy }, connection = null) => {
+const createTicket = async ({ ticketType, guestName = null, roomNumber = null, employeeId = null, zkUserId = null, specialNotes = null, deliveryTime = null, status = 'Received', posSaleId = null, createdBy }, connection = null) => {
   try {
     const client = connection || getSystemDB();
     const result = await client.request()
@@ -776,15 +776,16 @@ const createTicket = async ({ ticketType, guestName = null, roomNumber = null, e
       .input('guestName', sql.NVarChar(100), guestName)
       .input('roomNumber', sql.NVarChar(20), roomNumber)
       .input('employeeId', sql.Int, employeeId)
+      .input('zkUserId', sql.Int, zkUserId)
       .input('specialNotes', sql.NVarChar(500), specialNotes)
       .input('deliveryTime', sql.DateTime2, deliveryTime)
       .input('status', sql.NVarChar(20), status)
       .input('posSaleId', sql.Int, posSaleId)
       .input('createdBy', sql.Int, createdBy)
       .query(`
-        INSERT INTO ops.laundry_tickets (ticket_type, guest_name, room_number, employee_id, special_notes, delivery_time, status, pos_sale_id, created_by, created_at, updated_at)
+        INSERT INTO ops.laundry_tickets (ticket_type, guest_name, room_number, employee_id, zk_user_id, special_notes, delivery_time, status, pos_sale_id, created_by, created_at, updated_at)
         OUTPUT INSERTED.ticket_id AS ticketId
-        VALUES (@ticketType, @guestName, @roomNumber, @employeeId, @specialNotes, @deliveryTime, @status, @posSaleId, @createdBy, GETDATE(), GETDATE())
+        VALUES (@ticketType, @guestName, @roomNumber, @employeeId, @zkUserId, @specialNotes, @deliveryTime, @status, @posSaleId, @createdBy, GETDATE(), GETDATE())
       `);
     return result.recordset[0].ticketId;
   } catch (err) {
@@ -816,7 +817,7 @@ const getTicketById = async (ticketId) => {
       .input('ticketId', sql.Int, ticketId)
       .query(`
         SELECT t.ticket_id AS id, t.ticket_type AS ticketType, t.guest_name AS guestName, t.room_number AS roomNumber,
-               t.employee_id AS employeeId, t.special_notes AS specialNotes, t.delivery_time AS deliveryTime,
+               t.employee_id AS employeeId, t.zk_user_id AS zkUserId, t.special_notes AS specialNotes, t.delivery_time AS deliveryTime,
                t.status, t.pos_sale_id AS posSaleId, t.created_by AS createdBy, COALESCE(u.full_name_ar, u.username, N'النظام') AS creatorUsername,
                t.created_at AS createdAt, t.updated_at AS updatedAt
         FROM ops.laundry_tickets t
@@ -856,7 +857,7 @@ const getTickets = async () => {
         t.ticket_type AS ticketType, 
         t.guest_name AS guestName, 
         t.room_number AS roomNumber,
-        t.employee_id AS employeeId, 
+        t.employee_id AS employeeId, t.zk_user_id AS zkUserId,
         t.special_notes AS specialNotes, 
         t.delivery_time AS deliveryTime,
         t.status, 
@@ -1273,7 +1274,17 @@ const getDashboardSummary = async (startDate, endDate) => {
   }
 };
 
+const linkTicketEmployee = async (ticketId, zkUserId, connection = null) => {
+  const result = await (connection || getSystemDB()).request()
+    .input('ticketId', sql.Int, ticketId)
+    .input('zkUserId', sql.Int, zkUserId)
+    .query(`UPDATE ops.laundry_tickets SET zk_user_id = @zkUserId, updated_at = GETDATE()
+      WHERE ticket_id = @ticketId AND ticket_type = 'STAFF' AND zk_user_id IS NULL`);
+  return result.rowsAffected[0] === 1;
+};
+
 module.exports = {
+  linkTicketEmployee,
   createMachine,
   getMachines,
   createProgram,

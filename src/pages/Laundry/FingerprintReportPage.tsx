@@ -21,6 +21,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import { laundryApi } from '../../api/laundry.api';
 
 interface CheckinRecord {
+  userId: number;
   userCode?: string;
   employeeId?: string;
   employeeName?: string;
@@ -82,7 +83,7 @@ export const FingerprintReportPage: React.FC = () => {
 
   // Calculate high level metrics
   const totalCount = checkins.length;
-  const uniqueUsers = new Set(checkins.map(c => c.userCode || c.employeeId).filter(Boolean)).size;
+  const uniqueUsers = new Set(checkins.map(c => c.userId).filter(Boolean)).size;
   const todayCount = checkins.filter(c => {
     const todayStr = new Date().toISOString().split('T')[0];
     const cDateStr = c.checkTime ? new Date(c.checkTime).toISOString().split('T')[0] : '';
@@ -90,8 +91,9 @@ export const FingerprintReportPage: React.FC = () => {
   }).length;
 
   const exportCSV = () => {
-    const headers = ['كود الموظف', 'اسم الموظف', 'وقت وتاريخ البصمة', 'رقم الحساس', 'الرقم التسلسلي'];
+    const headers = ['معرف الموظف الدائم', 'كود الموظف', 'اسم الموظف', 'وقت وتاريخ البصمة', 'رقم الحساس', 'الرقم التسلسلي'];
     const rows = filteredCheckins.map(c => [
+      c.userId,
       c.userCode || c.employeeId || '---',
       c.employeeName || 'غير معروف',
       c.checkTime ? new Date(c.checkTime).toLocaleString('ar-EG') : '---',
@@ -315,7 +317,7 @@ export const FingerprintReportPage: React.FC = () => {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => navigate(`/laundry/handover?userCode=${code}`)}
+                          onClick={() => navigate(`/laundry/handover?userId=${item.userId}`)}
                           className="text-blue-600 hover:bg-blue-50 border border-blue-200 text-xs py-1 px-2"
                         >
                           <ArrowUpRight size={13} className="ml-1" />

@@ -27,6 +27,7 @@ const getLatestCheckins = async (limit = 10) => {
       .input('sn', sql.NVarChar(50), config.zkDb.laundrySn)
       .query(`
         SELECT TOP (@limit)
+          c.USERID AS userId,
           u.BADGENUMBER AS userCode,
           c.CHECKTIME AS checkTime,
           c.SENSORID AS sensorId,
@@ -46,13 +47,13 @@ const getLatestCheckins = async (limit = 10) => {
   }
 };
 
-const getEmployeeDetails = async (userCode) => {
+const getEmployeeDetails = async (employeeUserId) => {
   try {
     const pool = checkZkConnection();
 
     // 1. Fetch Employee Profile
     const empResult = await pool.request()
-      .input('userCode', sql.NVarChar(50), userCode)
+      .input('employeeUserId', sql.Int, employeeUserId)
       .query(`
         SELECT 
           u.USERID AS userId, 
@@ -62,7 +63,7 @@ const getEmployeeDetails = async (userCode) => {
           d.DEPTNAME AS department
         FROM dbo.USERINFO u
         LEFT JOIN dbo.DEPARTMENTS d ON u.DEFAULTDEPTID = d.DEPTID
-        WHERE u.BADGENUMBER = @userCode
+        WHERE u.USERID = @employeeUserId
       `);
 
     const employee = empResult.recordset[0];
@@ -126,6 +127,7 @@ const getEmployeeDetails = async (userCode) => {
 
     return {
       employee: {
+        userId: employee.userId,
         userCode: employee.userCode,
         name: employee.name,
         title: employee.title,
@@ -154,15 +156,15 @@ const getEmployeeDetails = async (userCode) => {
   }
 };
 
-const createHandoverReceiveTxn = async ({ userCode, itemCode, action, quantity = 1, createdBy, notes = null }) => {
+const createHandoverReceiveTxn = async ({ userId: employeeUserId, itemCode, action, quantity = 1, createdBy, notes = null }) => {
   const transaction = new sql.Transaction(checkZkConnection());
   try {
     await transaction.begin();
 
     // 1. Find employee
     const empResult = await transaction.request()
-      .input('userCode', sql.NVarChar(50), userCode)
-      .query(`SELECT USERID FROM dbo.USERINFO WHERE BADGENUMBER = @userCode`);
+      .input('employeeUserId', sql.Int, employeeUserId)
+      .query(`SELECT USERID FROM dbo.USERINFO WHERE USERID = @employeeUserId`);
     if (empResult.recordset.length === 0) {
       throw new AppError('الموظف المحدد غير موجود في قاعدة بيانات البصمة', 404, 'EMPLOYEE_NOT_FOUND');
     }
@@ -263,6 +265,7 @@ const getRecentDashboardTxns = async (limit = 10) => {
       .query(`
         SELECT TOP (@limit)
           t.TransactionID AS txnId,
+          ui.UserID AS userId,
           u.BADGENUMBER AS userCode,
           COALESCE(u.NAME, N'مستخدم غير معروف') AS employeeName,
           ui.ItemCode AS itemCode,
@@ -291,7 +294,8 @@ const getTransactionHistory = async ({ limit = 100, action, search } = {}) => {
     let query = `
       SELECT TOP (@limit)
         t.TransactionID AS txnId,
-        u.BADGENUMBER AS userCode,
+        ui.UserID AS userId,
+          u.BADGENUMBER AS userCode,
         COALESCE(u.NAME, N'مستخدم غير معروف') AS employeeName,
         ui.ItemCode AS itemCode,
         i.ItemName AS itemName,
@@ -330,7 +334,7 @@ const searchEmployees = async (search = '', limit = 1000) => {
     let query = `
       SELECT TOP (${Number(limit) || 1000}) 
         u.USERID AS userId, 
-        u.BADGENUMBER AS userCode, 
+          u.BADGENUMBER AS userCode,
         u.NAME AS name, 
         u.TITLE AS title, 
         d.DEPTNAME AS department
@@ -447,7 +451,8 @@ const getInLaundryInventory = async (filters = {}) => {
         ui.UserItemID AS userItemId,
         ui.ItemCode AS itemCode,
         i.ItemName AS itemName,
-        u.BADGENUMBER AS userCode,
+        ui.UserID AS userId,
+          u.BADGENUMBER AS userCode,
         u.NAME AS employeeName,
         u.TITLE AS jobTitle,
         COALESCE(d.DEPTNAME, N'غير محدد') AS department,
@@ -504,7 +509,7 @@ const getInLaundryInventory = async (filters = {}) => {
     const todayStr = new Date().toISOString().split('T')[0];
 
     items.forEach(row => {
-      employeesSet.add(row.userCode);
+      employeesSet.add(row.userId);
       itemBreakdown[row.itemName] = (itemBreakdown[row.itemName] || 0) + 1;
       departmentBreakdown[row.department] = (departmentBreakdown[row.department] || 0) + 1;
 

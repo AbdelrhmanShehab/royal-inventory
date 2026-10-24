@@ -1039,18 +1039,18 @@ const swaggerSpec = {
         responses: {
           200: {
             description: 'نجاح جلب السجلات',
-            content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean' }, data: { type: 'array', items: { type: 'object', properties: { userCode: { type: 'string' }, checkTime: { type: 'string' }, sensorId: { type: 'string' }, serialNumber: { type: 'string' }, employeeName: { type: 'string' } } } } } } } }
+            content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean' }, data: { type: 'array', items: { type: 'object', properties: { userId: { type: 'integer' }, userCode: { type: 'string' }, checkTime: { type: 'string' }, sensorId: { type: 'string' }, serialNumber: { type: 'string' }, employeeName: { type: 'string' } } } } } } } }
           }
         }
       }
     },
-    '/laundry/zk/employee/{userCode}': {
+    '/laundry/zk/employees/by-id/{userId}': {
       get: {
         tags: ['المغسلة والبصمة (Laundry & ZK)'],
         summary: 'جلب تفاصيل الموظف والعهدة وحركة المعاملات بالبصمة',
         description: 'يعيد تفاصيل الملف الشخصي للموظف، وقائمة العهد المخصصة له مع عدد القطع المستلمة والمسلمة، وسجل آخر 20 حركة.',
         parameters: [
-          { name: 'userCode', in: 'path', description: 'كود الموظف (BADGENUMBER)', required: true, schema: { type: 'string' } }
+          { name: 'userId', in: 'path', description: 'Permanent ZK USERID (not BADGENUMBER)', required: true, schema: { type: 'integer', minimum: 1 } }
         ],
         responses: {
           200: {
@@ -1064,7 +1064,7 @@ const swaggerSpec = {
                     data: {
                       type: 'object',
                       properties: {
-                        employee: { type: 'object', properties: { userCode: { type: 'string' }, name: { type: 'string' } } },
+                        employee: { type: 'object', properties: { userId: { type: 'integer' }, userCode: { type: 'string' }, name: { type: 'string' } } },
                         custody: { type: 'array', items: { type: 'object', properties: { userItemId: { type: 'integer' }, itemId: { type: 'integer' }, itemName: { type: 'string' }, itemCode: { type: 'string' }, assignedDate: { type: 'string' }, handedOverQty: { type: 'integer' }, receivedQty: { type: 'integer' }, pendingQty: { type: 'integer' } } } },
                         history: { type: 'array', items: { type: 'object', properties: { txnId: { type: 'integer' }, itemCode: { type: 'string' }, itemName: { type: 'string' }, action: { type: 'string' }, quantity: { type: 'integer' }, transactionDate: { type: 'string' }, notes: { type: 'string' } } } }
                       }
@@ -1088,9 +1088,9 @@ const swaggerSpec = {
             'application/json': {
               schema: {
                 type: 'object',
-                required: ['userCode', 'itemCode', 'action', 'quantity'],
+                required: ['userId', 'itemCode', 'action', 'quantity'],
                 properties: {
-                  userCode: { type: 'string', description: 'كود الموظف', example: '709' },
+                  userId: { type: 'integer', minimum: 1, description: 'Permanent ZK USERID', example: 1234 },
                   itemCode: { type: 'string', description: 'كود الصنف أو اسمه', example: '709-4' },
                   action: { type: 'string', enum: ['Handover', 'Receive'], description: 'نوع الحركة', example: 'Receive' },
                   quantity: { type: 'integer', minimum: 1, default: 1, description: 'الكمية المراد تسليمها/استلامها', example: 1 },

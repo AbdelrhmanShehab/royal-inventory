@@ -145,6 +145,9 @@ const createTicketSchema = Joi.object({
   guestName: Joi.string().max(100).required(),
   roomNumber: Joi.string().max(20).allow(null, ''),
   employeeId: Joi.number().integer().allow(null),
+  zkUserId: Joi.number().integer().positive().max(2147483647).when('ticketType', {
+    is: 'STAFF', then: Joi.required(), otherwise: Joi.valid(null),
+  }),
   specialNotes: Joi.string().max(500).allow(null, ''),
   deliveryTime: Joi.date().iso().allow(null),
   items: Joi.array().items(ticketItemSchema).min(1).required(),
@@ -160,14 +163,19 @@ const classifyChemicalSchema = Joi.object({
 });
 
 const createHandoverTxnSchema = Joi.object({
-  userCode: Joi.string().max(50).required(),
+  userId: Joi.number().integer().positive().max(2147483647).required(),
   itemCode: Joi.string().max(50).required(),
   action: Joi.string().valid('Handover', 'Receive').required(),
   quantity: Joi.number().integer().positive().required(),
   notes: Joi.string().max(500).allow(null, ''),
 });
 
+const linkTicketEmployeeSchema = Joi.object({
+  zkUserId: Joi.number().integer().positive().max(2147483647).required(),
+});
+
 module.exports = {
+  linkTicketEmployeeSchema,
   createMachineSchema,
   createProgramSchema,
   createRecipeSchema,

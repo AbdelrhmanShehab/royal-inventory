@@ -7,6 +7,7 @@ const { authenticate } = require('../../../middleware/auth.middleware');
 const { authorize, authorizeMinLevel } = require('../../../middleware/rbac.middleware');
 
 const {
+  linkTicketEmployeeSchema,
   createMachineSchema,
   createProgramSchema,
   createRecipeSchema,
@@ -69,6 +70,7 @@ router.get('/losses', controller.getLosses);
 router.post('/tickets', authorize('admin', 'manager', 'warehouse_manager', 'warehouse_head', 'laundry_supervisor', 'laundry_cashier'), validate(createTicketSchema), controller.createTicket);
 router.get('/tickets', controller.getTickets);
 router.get('/tickets/:id', controller.getTicket);
+router.put('/tickets/:id/employee', authorize('admin', 'manager', 'warehouse_manager', 'laundry_supervisor', 'laundry_cashier'), validate(linkTicketEmployeeSchema), controller.linkTicketEmployee);
 router.put('/tickets/:id/status', authorize('admin', 'manager', 'warehouse_manager', 'warehouse_head', 'laundry_supervisor', 'laundry_cashier'), validate(updateTicketStatusSchema), controller.updateTicketStatus);
 
 // ─── 8. POS / COMSYS SYNC ─────────────────────────────────────────────────────
@@ -86,7 +88,16 @@ router.get('/stock', controller.getLaundryStock);
 router.get('/zk/checkins', controller.getLatestZkCheckins);
 router.get('/zk/transactions', controller.getZkTransactions);
 router.get('/zk/employees', controller.getZkEmployees);
-router.get('/zk/employee/:userCode', controller.getZkEmployeeDetails);
+router.get('/zk/employees/by-id/:userId', (req, res, next) => {
+  if (!/^[1-9]\d*$/.test(req.params.userId) || Number(req.params.userId) > 2147483647) {
+    return res.status(400).json({ success: false, message: 'معرف الموظف غير صالح' });
+  }
+  next();
+}, controller.getZkEmployeeDetails);
+// Badge numbers are reusable. Old clients must refresh rather than resolve a badge to a person.
+router.get('/zk/employee/:userCode', (_req, res) => res.status(410).json({
+  success: false, message: 'يرجى تحديث التطبيق واختيار الموظف بمعرفه الدائم',
+}));
 router.post('/zk/transactions', authorize('admin', 'manager', 'warehouse_manager', 'warehouse_head', 'laundry_supervisor', 'uniform_clerk'), validate(createHandoverTxnSchema), controller.createZkHandoverTxn);
 router.get('/zk/dashboard', controller.getZkHandoverDashboard);
 router.get('/zk/in-laundry-inventory', controller.getInLaundryInventory);

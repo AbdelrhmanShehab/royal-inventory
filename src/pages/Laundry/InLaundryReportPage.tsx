@@ -13,18 +13,13 @@ import {
   Calendar,
   CheckCircle2,
   ArrowRight,
-  Filter,
   ExternalLink,
   ChevronLeft,
   ChevronRight,
-  Package,
   Layers,
-  Sparkles,
-  Info
 } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
-import Badge from '../../components/ui/Badge';
 import Loader from '../../components/ui/Loader';
 import EmptyState from '../../components/ui/EmptyState';
 import { laundryApi } from '../../api/laundry.api';
@@ -33,6 +28,7 @@ interface InLaundryItem {
   userItemId: number;
   itemCode: string;
   itemName: string;
+  userId: number;
   userCode: string;
   employeeName: string;
   jobTitle: string;
@@ -150,6 +146,7 @@ export const InLaundryReportPage: React.FC = () => {
   const handleExportCSV = () => {
     if (!filteredItems.length) return;
     const headers = [
+      'معرف الموظف الدائم',
       'كود الموظف',
       'اسم الموظف',
       'الوظيفة',
@@ -163,6 +160,7 @@ export const InLaundryReportPage: React.FC = () => {
     ];
 
     const rows = filteredItems.map(item => [
+      item.userId,
       item.userCode || '',
       `"${item.employeeName || ''}"`,
       `"${item.jobTitle || ''}"`,
@@ -651,11 +649,11 @@ export const InLaundryReportPage: React.FC = () => {
                           <td className="py-3.5 px-4 text-center">
                             <button
                               type="button"
-                              onClick={() => navigate(`/laundry/handover?userCode=${item.userCode}`)}
+                              onClick={() => navigate(`/laundry/handover?userId=${item.userId}`)}
                               title="انتقال لصفحة التسليم لهذا الموظف"
                               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-blue-50 text-blue-700 font-black font-mono hover:bg-blue-600 hover:text-white transition-colors border border-blue-200"
                             >
-                              <span>{item.userCode}</span>
+                              <span>{item.userCode} · ID: {item.userId}</span>
                               <ExternalLink className="w-2.5 h-2.5 opacity-60" />
                             </button>
                           </td>
@@ -712,7 +710,7 @@ export const InLaundryReportPage: React.FC = () => {
                           <td className="py-3.5 px-4 print:hidden text-center">
                             <button
                               type="button"
-                              onClick={() => navigate(`/laundry/handover?userCode=${item.userCode}`)}
+                              onClick={() => navigate(`/laundry/handover?userId=${item.userId}`)}
                               className="px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 hover:bg-blue-600 hover:text-white text-slate-700 transition-colors shadow-2xs"
                             >
                               تسليم القطعة

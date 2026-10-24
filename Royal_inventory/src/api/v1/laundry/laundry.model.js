@@ -218,12 +218,13 @@ class LaundryReturn {
 }
 
 class LaundryTicket {
-  constructor({ id, ticketType, guestName, roomNumber, employeeId, specialNotes, deliveryTime, status, posSaleId, createdBy, creatorUsername, createdAt, updatedAt, items = [] }) {
+  constructor({ id, ticketType, guestName, roomNumber, employeeId, zkUserId, specialNotes, deliveryTime, status, posSaleId, createdBy, creatorUsername, createdAt, updatedAt, items = [] }) {
     this.id = id;
     this.ticketType = ticketType; // GUEST, STAFF
     this.guestName = guestName || null;
     this.roomNumber = roomNumber || null;
     this.employeeId = employeeId || null;
+    this.zkUserId = zkUserId ?? null;
     this.specialNotes = specialNotes || null;
     this.deliveryTime = deliveryTime || null;
     this.status = status; // Received, Processing, Ready, Delivered
@@ -243,6 +244,7 @@ class LaundryTicket {
       guestName: row.guestName || row.guest_name,
       roomNumber: row.roomNumber || row.room_number,
       employeeId: row.employeeId || row.employee_id,
+      zkUserId: row.zkUserId ?? row.zk_user_id,
       specialNotes: row.specialNotes || row.special_notes,
       deliveryTime: row.deliveryTime || row.delivery_time,
       status: row.status,

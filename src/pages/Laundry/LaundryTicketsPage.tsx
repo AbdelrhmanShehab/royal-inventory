@@ -53,6 +53,21 @@ export const LaundryTicketsPage: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  const [staffSearch, setStaffSearch] = useState('');
+  const [staffOptions, setStaffOptions] = useState<{ userId: number; userCode: string; name: string; department?: string }[]>([]);
+  const [selectedStaff, setSelectedStaff] = useState<{ userId: number; name: string } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      if (!staffSearch.trim()) { setStaffOptions([]); return; }
+      try {
+        const response = await laundryApi.getZkEmployees(staffSearch.trim());
+        if (!cancelled) setStaffOptions((response?.data || response || []).slice(0, 20));
+      } catch { if (!cancelled) setStaffOptions([]); }
+    }, 250);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [staffSearch]);
+
   // Create Ticket Form State
   const [createForm, setCreateForm] = useState({
     ticketType: 'GUEST' as 'GUEST' | 'STAFF',
@@ -64,6 +79,22 @@ export const LaundryTicketsPage: React.FC = () => {
       { serviceItemCode: 'SRV-SHIRT-001', serviceItemName: 'قميص رجالي (غسيل وكي)', quantity: 1, unitPrice: 20 }
     ]
   });
+
+  const staffSelector = <>
+              <input className="w-full border rounded-xl p-2" value={staffSearch}
+                onChange={e => { setStaffSearch(e.target.value); setSelectedStaff(null); }} placeholder="ابحث عن الموظف" />
+              <select className="w-full border rounded-xl p-2" value={selectedStaff?.userId || ''}
+                onChange={e => {
+                  const staff = staffOptions.find(option => option.userId === Number(e.target.value));
+                  setSelectedStaff(staff || null);
+                  if (staff) setCreateForm(form => ({ ...form, guestName: staff.name }));
+                }} required>
+                <option value="">اختر الموظف</option>
+                {staffOptions.map(staff => <option key={staff.userId} value={staff.userId}>
+                  {staff.name} — {staff.userCode} — ID: {staff.userId} {staff.department}
+                </option>)}
+              </select>
+  </>;
 
   const loadTickets = async () => {
     try {
@@ -115,6 +146,9 @@ export const LaundryTicketsPage: React.FC = () => {
   };
 
   const handleOpenDetails = async (ticket: LaundryTicket) => {
+    setSelectedStaff(null);
+    setStaffSearch('');
+    setStaffOptions([]);
     try {
       setSelectedTicket(ticket);
       setDetailLoading(true);
@@ -162,7 +196,11 @@ export const LaundryTicketsPage: React.FC = () => {
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!createForm.guestName.trim()) {
+    if (createForm.ticketType === 'STAFF' && !selectedStaff) {
+      setErrorMsg('يرجى البحث واختيار الموظف');
+      return;
+    }
+    if (createForm.ticketType === 'GUEST' && !createForm.guestName.trim()) {
       setErrorMsg('يرجى كتابة اسم النزيل أو اسم الموظف');
       return;
     }
@@ -176,7 +214,8 @@ export const LaundryTicketsPage: React.FC = () => {
       setErrorMsg(null);
       const payload = {
         ticketType: createForm.ticketType,
-        guestName: createForm.guestName.trim(),
+        guestName: selectedStaff && createForm.ticketType === 'STAFF' ? selectedStaff.name : createForm.guestName.trim(),
+        zkUserId: createForm.ticketType === 'STAFF' ? selectedStaff?.userId : undefined,
         roomNumber: createForm.roomNumber.trim() || undefined,
         specialNotes: createForm.specialNotes.trim() || undefined,
         deliveryTime: createForm.deliveryTime ? new Date(createForm.deliveryTime).toISOString() : undefined,
@@ -190,6 +229,8 @@ export const LaundryTicketsPage: React.FC = () => {
       const res = await laundryApi.createTicket(payload);
       setSuccessMsg(`تم إنشاء تذكرة الغسيل رقم #${res?.ticketId || ''} بنجاح`);
       setIsCreateOpen(false);
+      setSelectedStaff(null);
+      setStaffSearch('');
       setCreateForm({
         ticketType: 'GUEST',
         guestName: '',
@@ -305,7 +346,7 @@ export const LaundryTicketsPage: React.FC = () => {
           <Button 
             variant="primary" 
             size="sm" 
-            onClick={() => setIsCreateOpen(true)}
+            onClick={() => { setSelectedStaff(null); setStaffSearch(''); setStaffOptions([]); setIsCreateOpen(true); }}
             className="bg-blue-600 hover:bg-blue-700 font-bold shadow-xs"
           >
             <Plus size={15} />
@@ -622,6 +663,12 @@ export const LaundryTicketsPage: React.FC = () => {
       <Modal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)} title="إنشاء تذكرة غسيل جديدة (نزيل / موظف)" size="lg">
         <form onSubmit={handleCreateSubmit} className="flex flex-col gap-4 font-arabic dir-rtl text-right">
           
+          {createForm.ticketType === 'STAFF' && (
+            <div>
+              <label className="text-xs font-bold">اختيار الموظف بالاسم أو كود البصمة *</label>
+              {staffSelector}
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="text-xs font-bold text-slate-700 block mb-1">نوع التذكرة *</label>
@@ -643,6 +690,7 @@ export const LaundryTicketsPage: React.FC = () => {
                 type="text"
                 placeholder={createForm.ticketType === 'GUEST' ? 'مثال: أ/ أحمد محمد' : 'اسم الموظف...'}
                 value={createForm.guestName}
+                readOnly={createForm.ticketType === 'STAFF'}
                 onChange={(e) => setCreateForm({ ...createForm, guestName: e.target.value })}
                 className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white focus:outline-none focus:border-blue-500 font-medium"
                 required
@@ -822,6 +870,28 @@ export const LaundryTicketsPage: React.FC = () => {
                 )}
               </div>
             </div>
+
+            {selectedTicket.ticketType === 'STAFF' && (
+              <div className="bg-amber-50 border rounded-xl p-3 text-sm">
+                {selectedTicket.zkUserId ? `معرف الموظف الدائم: ${selectedTicket.zkUserId}` : <>
+                  <p>هذه التذكرة غير مرتبطة بموظف. تحقق من صاحبها ثم اختره؛ كود البصمة والاسم لا يكفيان.</p>
+                  {staffSelector}
+                  <Button disabled={!selectedStaff || submitting} onClick={async () => {
+                    if (!selectedStaff) return;
+                    try {
+                      setSubmitting(true);
+                      await laundryApi.linkTicketEmployee(selectedTicket.id, selectedStaff.userId);
+                      setSelectedTicket({ ...selectedTicket, zkUserId: selectedStaff.userId });
+                      setSelectedStaff(null);
+                      setStaffSearch('');
+                      await loadTickets();
+                    } catch (err: any) {
+                      setErrorMsg(err.response?.data?.message || 'فشل ربط الموظف');
+                    } finally { setSubmitting(false); }
+                  }}>تأكيد ربط التذكرة بالموظف المختار</Button>
+                </>}
+              </div>
+            )}
 
             {/* Ticket Info Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white p-3 rounded-xl border border-slate-100 text-xs">

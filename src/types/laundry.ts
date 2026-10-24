@@ -146,6 +146,7 @@ export interface LaundryTicket {
   guestName: string | null;
   roomNumber: string | null;
   employeeId: number | null;
+  zkUserId: number | null;
   specialNotes: string | null;
   deliveryTime: string | null;
   status: 'Received' | 'In_Progress' | 'Ready' | 'Delivered' | 'Cancelled';
@@ -202,6 +203,8 @@ export interface ChemicalItem {
 }
 
 export interface ZkCheckin {
+  userId: number;
+  userCode: string;
   checkinId: number;
   employeeId: number;
   employeeName: string;

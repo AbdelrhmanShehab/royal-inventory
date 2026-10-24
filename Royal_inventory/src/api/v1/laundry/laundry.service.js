@@ -1035,6 +1035,14 @@ const getLosses = async () => {
 // ─── 7. GUEST & STAFF LAUNDRY TICKETS ──────────────────────────────────────────
 
 const createTicket = async (userId, data) => {
+  if (data.ticketType === 'STAFF') {
+    if (!Number.isInteger(data.zkUserId) || data.zkUserId <= 0) {
+      throw new BadRequestError('يرجى اختيار الموظف بمعرفه الدائم');
+    }
+    const details = await zkRepo.getEmployeeDetails(data.zkUserId);
+    if (!details) throw new NotFoundError('الموظف غير موجود في نظام البصمة');
+    data = { ...data, guestName: details.employee.name };
+  }
   const pool = getSystemDB();
   const transaction = new sql.Transaction(pool);
   try {
@@ -1045,6 +1053,7 @@ const createTicket = async (userId, data) => {
       guestName: data.guestName,
       roomNumber: data.roomNumber,
       employeeId: data.employeeId,
+      zkUserId: data.ticketType === 'STAFF' ? data.zkUserId : null,
       specialNotes: data.specialNotes,
       deliveryTime: data.deliveryTime,
       status: 'Received',
@@ -1410,18 +1419,18 @@ const getZkEmployees = async (search, limit) => {
   return await zkRepo.searchEmployees(search, limit || 1000);
 };
 
-const getZkEmployeeDetails = async (userCode) => {
-  const details = await zkRepo.getEmployeeDetails(userCode);
+const getZkEmployeeDetails = async (userId) => {
+  const details = await zkRepo.getEmployeeDetails(userId);
   if (!details) {
-    throw new NotFoundError(`الموظف ذو الكود ${userCode} غير موجود في نظام البصمة`);
+    throw new NotFoundError(`الموظف ذو المعرف ${userId} غير موجود في نظام البصمة`);
   }
   return details;
 };
 
 const recordZkHandoverReceive = async (createdBy, data) => {
-  const { userCode, itemCode, action, quantity, notes } = data;
+  const { userId, itemCode, action, quantity, notes } = data;
   return await zkRepo.createHandoverReceiveTxn({
-    userCode,
+    userId,
     itemCode,
     action,
     quantity,
@@ -1492,7 +1501,29 @@ const getInLaundryInventory = async (filters = {}) => {
   return await zkRepo.getInLaundryInventory(filters);
 };
 
+const linkTicketEmployee = async (ticketId, zkUserId, operatorId) => {
+  if (!Number.isInteger(ticketId) || ticketId <= 0) throw new BadRequestError('رقم التذكرة غير صالح');
+  const details = await zkRepo.getEmployeeDetails(zkUserId);
+  if (!details) throw new NotFoundError('الموظف غير موجود في نظام البصمة');
+  const transaction = new sql.Transaction(getSystemDB());
+  await transaction.begin();
+  try {
+    const linked = await laundryRepo.linkTicketEmployee(ticketId, zkUserId, transaction);
+    if (!linked) throw new BadRequestError('التذكرة غير موجودة أو مرتبطة بالفعل أو ليست تذكرة موظف');
+    await laundryRepo.logLaundryAudit({
+      userId: operatorId, action: 'LINK_TICKET_EMPLOYEE', entityType: 'ticket', entityId: ticketId,
+      newState: { zkUserId },
+    }, transaction);
+    await transaction.commit();
+    return { ticketId, zkUserId };
+  } catch (err) {
+    await transaction.rollback();
+    throw err;
+  }
+};
+
 module.exports = {
+  linkTicketEmployee,
   createMachine,
   getMachines,
   createProgram,

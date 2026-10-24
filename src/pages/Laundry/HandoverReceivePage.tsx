@@ -46,6 +46,7 @@ const isItemInLaundry = (c: CustodyItem): boolean => {
 };
 
 interface EmployeeInfo {
+  userId: number;
   userCode: string;
   name: string;
   title?: string;
@@ -64,7 +65,7 @@ interface EmployeeTransaction {
 }
 
 export const HandoverReceivePage: React.FC = () => {
-  const [, setSearchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
   // Mode: Standby (waiting for biometric fingerprint) vs Active (employee recognized)
@@ -82,6 +83,8 @@ export const HandoverReceivePage: React.FC = () => {
   const [isListening, setIsListening] = useState(true);
   const lastProcessedTimeRef = useRef<string | null>(null);
   const initializedRef = useRef(false);
+  const employeeRequestRef = useRef(0);
+  const transactionInFlightRef = useRef(false);
 
   // UI state
   const [loading, setLoading] = useState(false);
@@ -179,19 +182,27 @@ export const HandoverReceivePage: React.FC = () => {
   }, [searchQuery]);
 
   // Fetch full employee details & custody
-  const loadEmployeeDetails = async (codeToFetch: string, fromBiometric = false, checkinDate?: string) => {
-    if (!codeToFetch.trim()) return;
+  const loadEmployeeDetails = async (userIdToFetch: number, fromBiometric = false, checkinDate?: string) => {
+    if (!Number.isInteger(userIdToFetch) || userIdToFetch <= 0 || transactionInFlightRef.current) return;
+    const requestId = ++employeeRequestRef.current;
+    setIsBiometricVerified(false);
+    setEmployee(null);
+    setCustodyItems([]);
+    setHistoryTxns([]);
+    setStaffTickets([]);
+    setAutoResetTimer(null);
 
     try {
       setLoading(true);
       setErrorMsg(null);
       setSuccessMsg(null);
 
-      const res = await laundryApi.getZkEmployeeDetails(codeToFetch.trim());
+      const res = await laundryApi.getZkEmployeeDetails(userIdToFetch);
       const data = res?.data || res;
+      if (requestId !== employeeRequestRef.current) return;
 
       if (!data || !data.employee) {
-        setErrorMsg(`لم يتم العثور على موظف بالكود ${codeToFetch} في قاعدة بيانات البصمة`);
+        setErrorMsg(`لم يتم العثور على موظف بالمعرف ${userIdToFetch} في قاعدة بيانات البصمة`);
         return;
       }
 
@@ -208,17 +219,15 @@ export const HandoverReceivePage: React.FC = () => {
         const ticketsRes = await laundryApi.getTickets();
         const allT = Array.isArray(ticketsRes) ? ticketsRes : ((ticketsRes as any)?.data || []);
         const matchingTickets = allT.filter((t: any) => {
-          const empCode = data.employee.userCode?.toString();
-          const empName = data.employee.name?.toLowerCase().trim();
-          const ticketGuest = (t.guestName || '').toLowerCase().trim();
-          const matchCode = t.roomNumber === empCode || t.employeeId?.toString() === empCode;
-          const matchName = empName && ticketGuest.includes(empName);
-          return (matchCode || matchName) && t.status !== 'Delivered' && t.status !== 'Cancelled';
+          return t.ticketType === 'STAFF' && t.zkUserId === data.employee.userId
+            && t.status !== 'Delivered' && t.status !== 'Cancelled';
         });
-        setStaffTickets(matchingTickets);
+        if (requestId === employeeRequestRef.current) setStaffTickets(matchingTickets);
       } catch {
-        setStaffTickets([]);
+        if (requestId === employeeRequestRef.current) setStaffTickets([]);
       }
+
+      if (requestId !== employeeRequestRef.current) return;
 
       // Smart default action and single item pre-selection:
       // If employee has items in laundry, he came to receive them ("جاي يستلم") -> Action = 'Handover'
@@ -241,12 +250,22 @@ export const HandoverReceivePage: React.FC = () => {
         playBiometricSound();
       }
     } catch (err: any) {
+      if (requestId !== employeeRequestRef.current) return;
       console.error('Error fetching employee details:', err);
       setErrorMsg(err.response?.data?.message || `فشل في جلب بيانات الموظف`);
     } finally {
-      setLoading(false);
+      if (requestId === employeeRequestRef.current) setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (searchParams.has('userCode')) {
+      setErrorMsg('رابط كود البصمة قديم. ابحث عن الموظف واختره أو استخدم بصمة جديدة.');
+      return;
+    }
+    const requestedId = Number(searchParams.get('userId'));
+    if (requestedId > 0) void loadEmployeeDetails(requestedId);
+  }, [searchParams]);
 
   // Real-time Biometric Scanner Polling Loop (Listening on sensor 104)
   useEffect(() => {
@@ -265,18 +284,19 @@ export const HandoverReceivePage: React.FC = () => {
         if (list.length > 0) {
           const latest = list[0];
           const checkTime = latest.checkTime;
+          const scanKey = JSON.stringify([latest.userId, checkTime, latest.sensorId, latest.serialNumber]);
 
           // First run: just initialize baseline so we don't trigger on an old punch
           if (!initializedRef.current) {
             initializedRef.current = true;
-            lastProcessedTimeRef.current = checkTime;
+            lastProcessedTimeRef.current = scanKey;
             isPolling = false;
             return;
           }
 
           // If a new fingerprint scan has occurred!
-          if (checkTime && checkTime !== lastProcessedTimeRef.current) {
-            lastProcessedTimeRef.current = checkTime;
+          if (checkTime && scanKey !== lastProcessedTimeRef.current) {
+            lastProcessedTimeRef.current = scanKey;
 
             const punchTimeStr = new Date(checkTime).toLocaleTimeString('ar-EG', {
               hour: '2-digit',
@@ -285,8 +305,8 @@ export const HandoverReceivePage: React.FC = () => {
             });
 
             // Automatically recognize and load the employee!
-            if (latest.userCode) {
-              await loadEmployeeDetails(latest.userCode, true, punchTimeStr);
+            if (latest.userId) {
+              await loadEmployeeDetails(latest.userId, true, punchTimeStr);
             }
           }
         }
@@ -306,6 +326,9 @@ export const HandoverReceivePage: React.FC = () => {
 
   // Reset to Standby Screen (Ready for next employee)
   const resetToStandby = () => {
+    ++employeeRequestRef.current;
+    setLoading(false);
+    setStaffTickets([]);
     setEmployee(null);
     setCustodyItems([]);
     setHistoryTxns([]);
@@ -388,6 +411,7 @@ export const HandoverReceivePage: React.FC = () => {
 
   // Perform Transaction for single item
   const handlePerformAction = async () => {
+    if (transactionInFlightRef.current) return;
     if (!employee || !isBiometricVerified) {
       setErrorMsg('عمليات التسليم والاستلام مقيدة بالبصمة الحية على جهاز المغسلة حصراً.');
       return;
@@ -398,6 +422,7 @@ export const HandoverReceivePage: React.FC = () => {
       return;
     }
 
+    transactionInFlightRef.current = true;
     const targetItem = custodyItems.find(c => c.itemCode === selectedItemCode);
 
     try {
@@ -408,7 +433,7 @@ export const HandoverReceivePage: React.FC = () => {
       const noteText = `${currentAction === 'Handover' ? 'Handover' : 'Receive'} single item confirmed after biometric verification.`;
 
       await laundryApi.createZkTransaction({
-        userCode: employee.userCode,
+        userId: employee.userId,
         itemCode: selectedItemCode,
         action: currentAction,
         quantity: 1,
@@ -425,7 +450,7 @@ export const HandoverReceivePage: React.FC = () => {
       setBiometricTime(null);
 
       // Refresh employee custody from backend
-      const res = await laundryApi.getZkEmployeeDetails(employee.userCode);
+      const res = await laundryApi.getZkEmployeeDetails(employee.userId);
       const data = res?.data || res;
       if (data && data.custody) {
         const newCustody: CustodyItem[] = data.custody;
@@ -455,6 +480,7 @@ export const HandoverReceivePage: React.FC = () => {
       console.error(`Error performing ${currentAction}:`, err);
       setErrorMsg(err.response?.data?.message || `فشل في تسجيل العملية`);
     } finally {
+      transactionInFlightRef.current = false;
       setSubmitting(false);
     }
   };
@@ -535,18 +561,18 @@ export const HandoverReceivePage: React.FC = () => {
                 </div>
                 {searchResults.map((emp) => (
                   <button
-                    key={emp.userId || emp.userCode}
+                    key={emp.userId}
                     type="button"
                     onClick={() => {
                       setSearchQuery('');
                       setSearchResults([]);
-                      loadEmployeeDetails(emp.userCode, false);
+                      loadEmployeeDetails(emp.userId, false);
                     }}
                     className="w-full p-2.5 text-right hover:bg-blue-50 transition-colors flex items-center justify-between gap-2 text-xs border-b border-slate-100 last:border-0"
                   >
                     <div className="flex flex-col text-right">
                       <span className="font-bold text-slate-800 text-sm">{emp.name}</span>
-                      <span className="text-xs text-slate-400 font-mono">كود: {emp.userCode}</span>
+                      <span className="text-xs text-slate-400 font-mono">كود: {emp.userCode} · معرف: {emp.userId}</span>
                     </div>
                     <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200">
                       عرض الهدوم
@@ -676,18 +702,18 @@ export const HandoverReceivePage: React.FC = () => {
                   <div className="divide-y divide-slate-100">
                     {searchResults.map((emp) => (
                       <button
-                        key={emp.userId || emp.userCode}
+                        key={emp.userId}
                         type="button"
                         onClick={() => {
                           setSearchQuery('');
                           setSearchResults([]);
-                          loadEmployeeDetails(emp.userCode, false);
+                          loadEmployeeDetails(emp.userId, false);
                         }}
                         className="w-full p-3.5 text-right hover:bg-blue-50/80 transition-colors flex items-center justify-between gap-3 text-xs"
                       >
                         <div className="flex items-center gap-3">
                           <span className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-mono font-black text-sm">
-                            {emp.userCode}
+                            {emp.userCode} · ID: {emp.userId}
                           </span>
                           <div className="flex flex-col text-right">
                             <span className="font-black text-slate-800 text-base">{emp.name}</span>
@@ -805,7 +831,7 @@ export const HandoverReceivePage: React.FC = () => {
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex flex-col">
                   <span className="text-xs text-slate-400 font-bold">كود الموظف</span>
                   <span className="text-xl font-black text-blue-600 font-mono mt-0.5">
-                    {employee.userCode}
+                    {employee.userCode} · ID: {employee.userId}
                   </span>
                 </div>
 

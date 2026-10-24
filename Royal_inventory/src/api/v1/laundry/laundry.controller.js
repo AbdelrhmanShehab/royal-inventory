@@ -247,8 +247,8 @@ const getZkEmployees = asyncHandler(async (req, res) => {
 });
 
 const getZkEmployeeDetails = asyncHandler(async (req, res) => {
-  const { userCode } = req.params;
-  const result = await service.getZkEmployeeDetails(userCode);
+  const { userId } = req.params;
+  const result = await service.getZkEmployeeDetails(Number(userId));
   return R.success(res, result, 'تم جلب تفاصيل الموظف والعهدة بنجاح');
 });
 
@@ -276,7 +276,13 @@ const getInLaundryInventory = asyncHandler(async (req, res) => {
   return R.success(res, result, 'تم جلب تقرير موجودات المغسلة الحالية بنجاح');
 });
 
+const linkTicketEmployee = asyncHandler(async (req, res) => {
+  const result = await service.linkTicketEmployee(Number(req.params.id), req.body.zkUserId, req.user.id);
+  return R.success(res, result, 'تم ربط التذكرة بالموظف');
+});
+
 module.exports = {
+  linkTicketEmployee,
   createMachine,
   getMachines,
   createProgram,
