@@ -51,7 +51,7 @@ export default function SettingsPage() {
             إعدادات النظام والربط بالأجهزة
           </h1>
           <p className="text-xs lg:text-sm text-slate-500 mt-1">
-            إدارة إعدادات الربط بنقاط البيع COMSYS وأجهزة الحضور والعهد ZK.
+            إدارة إعدادات الربط بنقاط البيع COMSYS وأجهزة التوقيع والعهد ZK.
           </p>
         </div>
       </div>
@@ -67,7 +67,7 @@ export default function SettingsPage() {
           <Card className="border-slate-200/60 shadow-2xs">
             <Card.Body className="p-5 flex flex-col gap-4">
               <p className="text-xs text-slate-600 leading-relaxed">
-                ربط مبيعات وتذاكر المغسلة مع نظام COMSYS POS ومزامنة حضور وانصراف موظفي المغسلة عبر أجهزة البصمة ZK.
+                ربط مبيعات وتذاكر المغسلة مع نظام COMSYS POS ومزامنة توقيع موظفي المغسلة عبر أجهزة البصمة ZK.
               </p>
 
               <div className="flex flex-col gap-2 bg-slate-50 p-4 rounded-xl border border-slate-100 text-xs">
@@ -114,7 +114,7 @@ export default function SettingsPage() {
         <div className="flex flex-col gap-4">
           <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
             <UserCheck size={18} className="text-blue-600" />
-            حضور وانصراف موظفي المغسلة (ZK Attendance)
+            بصمات توقيع موظفي المغسلة (ZK Signature)
           </h2>
           <Card className="border-slate-200/60 shadow-2xs">
             <Card.Body className="p-0">

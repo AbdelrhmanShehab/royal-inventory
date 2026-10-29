@@ -1439,10 +1439,11 @@ const recordZkHandoverReceive = async (createdBy, data) => {
   });
 };
 
-const getZkHandoverDashboard = async () => {
-  const stats = await zkRepo.getDashboardStats();
-  const recentTransactions = await zkRepo.getRecentDashboardTxns(10);
-  const rawChartData = await zkRepo.getDashboardChartData(7);
+const getZkHandoverDashboard = async (filters = {}) => {
+  const { fromDate, toDate } = filters;
+  const stats = await zkRepo.getDashboardStats({ fromDate, toDate });
+  const recentTransactions = await zkRepo.getRecentDashboardTxns(10, { fromDate, toDate });
+  const rawChartData = await zkRepo.getDashboardChartData({ days: 7, fromDate, toDate });
 
   const chartData = rawChartData.map(row => ({
     date: row.txnDate ? new Date(row.txnDate).toISOString().split('T')[0] : null,
@@ -1522,6 +1523,251 @@ const linkTicketEmployee = async (ticketId, zkUserId, operatorId) => {
   }
 };
 
+const getAllCustodyItems = async (filters = {}) => {
+  return await zkRepo.getAllCustodyItems(filters);
+};
+
+const getCustodyItemByCode = async (itemCode) => {
+  const item = await zkRepo.getCustodyItemByCode(itemCode);
+  if (!item) {
+    throw new NotFoundError(`الصنف ذو الكود ${itemCode} غير موجود كعهدة مسجلة`);
+  }
+  const history = await laundryRepo.getItemTransferHistory(itemCode);
+  return {
+    ...item,
+    transferHistory: history || [],
+  };
+};
+
+const transferCustodyItem = async (operator, data) => {
+  const { itemCode, fromUserId, toUserId, reason } = data;
+  const operatorId = operator?.id || operator?.user_id || 1;
+  const operatorName = operator?.fullNameAr || operator?.username || 'المسؤول';
+
+  // 1. Perform transfer in ZK database (updates UserItems and inserts into ItemTransactions)
+  const transferResult = await zkRepo.transferCustodyItem({
+    itemCode,
+    fromUserId: Number(fromUserId),
+    toUserId: Number(toUserId),
+    reason,
+    handledBy: operatorName,
+  });
+
+  // 2. Record detailed audit log in ops.laundry_custody_transfers
+  await laundryRepo.recordCustodyTransferLog({
+    itemCode: transferResult.itemCode,
+    itemName: transferResult.itemName,
+    fromZkUserId: transferResult.fromEmployee.userId,
+    fromEmployeeName: transferResult.fromEmployee.name,
+    fromBadge: transferResult.fromEmployee.badge,
+    fromDepartment: transferResult.fromEmployee.department,
+    toZkUserId: transferResult.toEmployee.userId,
+    toEmployeeName: transferResult.toEmployee.name,
+    toBadge: transferResult.toEmployee.badge,
+    toDepartment: transferResult.toEmployee.department,
+    userItemId: transferResult.userItemId,
+    reason,
+    transferredBy: operatorId,
+    transferredByName: operatorName,
+  });
+
+  // 3. Record in system general laundry audit logs
+  await laundryRepo.logLaundryAudit({
+    userId: operatorId,
+    action: 'TRANSFER_CUSTODY_ITEM',
+    entityType: 'custody_item',
+    entityId: transferResult.userItemId,
+    oldState: {
+      userId: transferResult.fromEmployee.userId,
+      employeeName: transferResult.fromEmployee.name,
+      badge: transferResult.fromEmployee.badge,
+    },
+    newState: {
+      userId: transferResult.toEmployee.userId,
+      employeeName: transferResult.toEmployee.name,
+      badge: transferResult.toEmployee.badge,
+      reason,
+    },
+  });
+
+  return transferResult;
+};
+
+const createCustodyItem = async (operator, data) => {
+  const { itemCode, itemId, userId, notes } = data;
+  const operatorId = operator?.id || operator?.user_id || 1;
+  const operatorName = operator?.fullNameAr || operator?.username || 'المسؤول';
+
+  const result = await zkRepo.createCustodyItem({
+    itemCode,
+    itemId: Number(itemId),
+    userId: userId ? Number(userId) : null,
+    notes,
+    handledBy: operatorName,
+  });
+
+  // Record in audit log ops.laundry_custody_transfers
+  await laundryRepo.recordCustodyTransferLog({
+    itemCode: result.itemCode,
+    itemName: result.itemName,
+    fromZkUserId: null,
+    fromEmployeeName: 'تكويد صنف جديد',
+    fromBadge: null,
+    fromDepartment: null,
+    toZkUserId: result.userId,
+    toEmployeeName: result.employeeName,
+    toBadge: result.badgeNumber,
+    toDepartment: result.department,
+    userItemId: result.userItemId,
+    reason: notes || (result.userId ? 'تكويد وتخصيص عهدة جديدة' : 'تكويد عهدة حرة بالمخزن'),
+    transferredBy: operatorId,
+    transferredByName: operatorName,
+  });
+
+  // System audit log
+  await laundryRepo.logLaundryAudit({
+    userId: operatorId,
+    action: 'CREATE_CUSTODY_ITEM',
+    entityType: 'custody_item',
+    entityId: result.userItemId,
+    oldState: null,
+    newState: {
+      itemCode: result.itemCode,
+      itemName: result.itemName,
+      userId: result.userId,
+      employeeName: result.employeeName,
+    },
+  });
+
+  return result;
+};
+
+const unassignCustodyItem = async (operator, itemCode, data = {}) => {
+  const { reason } = data;
+  const operatorId = operator?.id || operator?.user_id || 1;
+  const operatorName = operator?.fullNameAr || operator?.username || 'المسؤول';
+
+  const result = await zkRepo.unassignCustodyItem({
+    itemCode,
+    reason,
+    handledBy: operatorName,
+  });
+
+  // Audit log in custody transfers
+  await laundryRepo.recordCustodyTransferLog({
+    itemCode: result.itemCode,
+    itemName: result.itemName,
+    fromZkUserId: result.previousEmployee.userId,
+    fromEmployeeName: result.previousEmployee.name,
+    fromBadge: result.previousEmployee.badge,
+    fromDepartment: result.previousEmployee.department,
+    toZkUserId: null,
+    toEmployeeName: 'مخزن العهد (غير مخصص)',
+    toBadge: null,
+    toDepartment: null,
+    userItemId: result.userItemId,
+    reason: reason || 'فك تخصيص العهدة وإرجاعها للمخزن',
+    transferredBy: operatorId,
+    transferredByName: operatorName,
+  });
+
+  await laundryRepo.logLaundryAudit({
+    userId: operatorId,
+    action: 'UNASSIGN_CUSTODY_ITEM',
+    entityType: 'custody_item',
+    entityId: result.userItemId,
+    oldState: {
+      userId: result.previousEmployee.userId,
+      employeeName: result.previousEmployee.name,
+      badge: result.previousEmployee.badge,
+    },
+    newState: {
+      userId: null,
+      employeeName: 'غير مخصص (بالمخزن)',
+      reason,
+    },
+  });
+
+  return result;
+};
+
+const assignCustodyItem = async (operator, itemCode, data = {}) => {
+  const { toUserId, notes } = data;
+  const operatorId = operator?.id || operator?.user_id || 1;
+  const operatorName = operator?.fullNameAr || operator?.username || 'المسؤول';
+
+  const result = await zkRepo.assignCustodyItem({
+    itemCode,
+    toUserId: Number(toUserId),
+    notes,
+    handledBy: operatorName,
+  });
+
+  await laundryRepo.recordCustodyTransferLog({
+    itemCode: result.itemCode,
+    itemName: result.itemName,
+    fromZkUserId: result.previousEmployee ? result.previousEmployee.userId : null,
+    fromEmployeeName: result.previousEmployee ? result.previousEmployee.name : 'مخزن العهد (غير مخصص)',
+    fromBadge: result.previousEmployee ? result.previousEmployee.badge : null,
+    fromDepartment: result.previousEmployee ? result.previousEmployee.department : null,
+    toZkUserId: result.assignedTo.userId,
+    toEmployeeName: result.assignedTo.name,
+    toBadge: result.assignedTo.badge,
+    toDepartment: result.assignedTo.department,
+    userItemId: result.userItemId,
+    reason: notes || 'تخصيص عهدة لموظف',
+    transferredBy: operatorId,
+    transferredByName: operatorName,
+  });
+
+  await laundryRepo.logLaundryAudit({
+    userId: operatorId,
+    action: 'ASSIGN_CUSTODY_ITEM',
+    entityType: 'custody_item',
+    entityId: result.userItemId,
+    oldState: result.previousEmployee,
+    newState: {
+      userId: result.assignedTo.userId,
+      employeeName: result.assignedTo.name,
+      notes,
+    },
+  });
+
+  return result;
+};
+
+const deleteCustodyItem = async (operator, itemCode) => {
+  const operatorId = operator?.id || operator?.user_id || 1;
+  const result = await zkRepo.deleteCustodyItem({ itemCode });
+
+  await laundryRepo.logLaundryAudit({
+    userId: operatorId,
+    action: 'DELETE_CUSTODY_ITEM',
+    entityType: 'custody_item',
+    entityId: result.userItemId,
+    oldState: { itemCode },
+    newState: null,
+  });
+
+  return result;
+};
+
+const getItemDefinitions = async () => {
+  return await zkRepo.getItemDefinitions();
+};
+
+const getCustodyTransferLogs = async (filters = {}) => {
+  return await laundryRepo.getCustodyTransferLogs(filters);
+};
+
+const getCustodyStats = async () => {
+  return await zkRepo.getCustodyStats();
+};
+
+const getDepartmentsList = async () => {
+  return await zkRepo.getDepartmentsList();
+};
+
 module.exports = {
   linkTicketEmployee,
   createMachine,
@@ -1570,4 +1816,15 @@ module.exports = {
   getZkHandoverDashboard,
   getUnifiedDashboardSummary,
   getInLaundryInventory,
+  getAllCustodyItems,
+  getCustodyItemByCode,
+  createCustodyItem,
+  unassignCustodyItem,
+  assignCustodyItem,
+  deleteCustodyItem,
+  transferCustodyItem,
+  getCustodyTransferLogs,
+  getCustodyStats,
+  getItemDefinitions,
+  getDepartmentsList,
 };

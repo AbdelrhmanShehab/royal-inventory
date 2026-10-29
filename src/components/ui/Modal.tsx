@@ -38,13 +38,13 @@ export const Modal: React.FC<ModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
       {/* Backdrop */}
-      <div 
+      <div
         className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity"
         onClick={onClose}
       />
 
       {/* Modal Card */}
-      <div 
+      <div
         className={`relative w-full ${sizeClasses[size]} bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden z-10 transition-all transform animate-fade-in`}
       >
         {/* Header */}

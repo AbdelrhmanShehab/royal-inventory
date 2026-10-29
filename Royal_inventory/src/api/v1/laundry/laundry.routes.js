@@ -4,7 +4,7 @@ const router = require('express').Router();
 const controller = require('./laundry.controller');
 const validate = require('../../../middleware/validate.middleware');
 const { authenticate } = require('../../../middleware/auth.middleware');
-const { authorize, authorizeMinLevel } = require('../../../middleware/rbac.middleware');
+const { authorize, authorizeMinLevel, authorizePermission } = require('../../../middleware/rbac.middleware');
 
 const {
   linkTicketEmployeeSchema,
@@ -22,6 +22,10 @@ const {
   updateTicketStatusSchema,
   createHandoverTxnSchema,
   classifyChemicalSchema,
+  transferCustodySchema,
+  createCustodyItemSchema,
+  unassignCustodySchema,
+  assignCustodySchema,
 } = require('./laundry.validation');
 
 // All routes require authentication
@@ -101,5 +105,18 @@ router.get('/zk/employee/:userCode', (_req, res) => res.status(410).json({
 router.post('/zk/transactions', authorize('admin', 'manager', 'warehouse_manager', 'warehouse_head', 'laundry_supervisor', 'uniform_clerk'), validate(createHandoverTxnSchema), controller.createZkHandoverTxn);
 router.get('/zk/dashboard', controller.getZkHandoverDashboard);
 router.get('/zk/in-laundry-inventory', controller.getInLaundryInventory);
+
+// ─── 11. UNIFORM & ITEM CUSTODY MANAGEMENT & TRANSFERS ────────────────────────
+router.get('/zk/custody-stats', authorizePermission('transfer_laundry_custody', 'manage_laundry_uniforms'), controller.getCustodyStats);
+router.get('/zk/custody-departments', authorizePermission('transfer_laundry_custody', 'manage_laundry_uniforms'), controller.getDepartmentsList);
+router.get('/zk/item-definitions', authorizePermission('transfer_laundry_custody', 'manage_laundry_uniforms'), controller.getItemDefinitions);
+router.get('/zk/custody-items', authorizePermission('transfer_laundry_custody', 'manage_laundry_uniforms'), controller.getAllCustodyItems);
+router.get('/zk/custody-items/:itemCode', authorizePermission('transfer_laundry_custody', 'manage_laundry_uniforms'), controller.getCustodyItemByCode);
+router.post('/zk/custody-items', authorizePermission('transfer_laundry_custody', 'manage_laundry_uniforms'), validate(createCustodyItemSchema), controller.createCustodyItem);
+router.post('/zk/custody-items/:itemCode/unassign', authorizePermission('transfer_laundry_custody', 'manage_laundry_uniforms'), validate(unassignCustodySchema), controller.unassignCustodyItem);
+router.post('/zk/custody-items/:itemCode/assign', authorizePermission('transfer_laundry_custody', 'manage_laundry_uniforms'), validate(assignCustodySchema), controller.assignCustodyItem);
+router.post('/zk/custody-items/transfer', authorizePermission('transfer_laundry_custody'), validate(transferCustodySchema), controller.transferCustodyItem);
+router.delete('/zk/custody-items/:itemCode', authorizePermission('transfer_laundry_custody', 'manage_laundry_uniforms'), controller.deleteCustodyItem);
+router.get('/zk/custody-transfers/logs', authorizePermission('transfer_laundry_custody', 'manage_laundry_uniforms'), controller.getCustodyTransferLogs);
 
 module.exports = router;

@@ -12,7 +12,7 @@ export const Badge: React.FC<BadgeProps> = ({
   ...props
 }) => {
   const baseClasses = 'inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full border';
-  
+
   const variants = {
     success: 'bg-emerald-50 text-emerald-700 border-emerald-200/60',
     warning: 'bg-amber-50 text-amber-700 border-amber-200/60',

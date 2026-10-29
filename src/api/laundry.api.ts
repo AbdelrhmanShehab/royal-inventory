@@ -150,10 +150,11 @@ export const laundryApi = {
     return api.put(`/laundry/tickets/${ticketId}/employee`, { zkUserId }).then(res => res.data);
   },
   // ZK Custody & Attendance Integration
-  getZkCheckins: async (limit: number = 50): Promise<any> => {
-    return api.get(`/laundry/zk/checkins?limit=${limit}`).then(res => res.data);
+  getZkCheckins: async (paramsOrLimit?: number | { page?: number; pageSize?: number; limit?: number; fromDate?: string; toDate?: string; search?: string }): Promise<any> => {
+    const params = typeof paramsOrLimit === 'number' ? { limit: paramsOrLimit } : (paramsOrLimit || {});
+    return api.get('/laundry/zk/checkins', { params }).then(res => res.data);
   },
-  getZkTransactions: async (params?: { limit?: number; action?: string; search?: string }): Promise<any> => {
+  getZkTransactions: async (params?: { page?: number; pageSize?: number; limit?: number; action?: string; search?: string; fromDate?: string; toDate?: string }): Promise<any> => {
     return api.get('/laundry/zk/transactions', { params }).then(res => res.data);
   },
   getZkEmployees: async (search?: string): Promise<any> => {
@@ -165,11 +166,45 @@ export const laundryApi = {
   createZkTransaction: async (data: { userId: number; itemCode: string; action: 'Handover' | 'Receive'; quantity: number; notes?: string }): Promise<any> => {
     return api.post('/laundry/zk/transactions', data).then(res => res.data);
   },
-  getZkDashboard: async (): Promise<any> => {
-    return api.get('/laundry/zk/dashboard').then(res => res.data);
+  getZkDashboard: async (params?: { fromDate?: string; toDate?: string }): Promise<any> => {
+    return api.get('/laundry/zk/dashboard', { params }).then(res => res.data);
   },
   getInLaundryInventory: async (params?: { department?: string; itemName?: string; search?: string }): Promise<any> => {
     return api.get('/laundry/zk/in-laundry-inventory', { params }).then(res => res.data);
+  },
+  // Uniform Custody Management & Audit Logs
+  getAllCustodyItems: async (params?: { department?: string; itemName?: string; search?: string; assignmentStatus?: 'all' | 'assigned' | 'unassigned'; status?: string; laundryStatus?: string; page?: number; pageSize?: number; limit?: number }): Promise<any> => {
+    return api.get('/laundry/zk/custody-items', { params }).then(res => res.data);
+  },
+  getCustodyItemByCode: async (itemCode: string): Promise<any> => {
+    return api.get(`/laundry/zk/custody-items/${encodeURIComponent(itemCode)}`).then(res => res.data);
+  },
+  getItemDefinitions: async (): Promise<any> => {
+    return api.get('/laundry/zk/item-definitions').then(res => res.data);
+  },
+  createCustodyItem: async (data: { itemCode: string; itemId: number; userId?: number | null; notes?: string }): Promise<any> => {
+    return api.post('/laundry/zk/custody-items', data).then(res => res.data);
+  },
+  unassignCustodyItem: async (itemCode: string, data?: { reason?: string }): Promise<any> => {
+    return api.post(`/laundry/zk/custody-items/${encodeURIComponent(itemCode)}/unassign`, data || {}).then(res => res.data);
+  },
+  assignCustodyItem: async (itemCode: string, data: { toUserId: number; notes?: string }): Promise<any> => {
+    return api.post(`/laundry/zk/custody-items/${encodeURIComponent(itemCode)}/assign`, data).then(res => res.data);
+  },
+  deleteCustodyItem: async (itemCode: string): Promise<any> => {
+    return api.delete(`/laundry/zk/custody-items/${encodeURIComponent(itemCode)}`).then(res => res.data);
+  },
+  transferCustodyItem: async (data: { itemCode: string; fromUserId: number; toUserId: number; reason?: string }): Promise<any> => {
+    return api.post('/laundry/zk/custody-items/transfer', data).then(res => res.data);
+  },
+  getCustodyTransferLogs: async (params?: { search?: string; itemCode?: string; userId?: number; fromDate?: string; toDate?: string; page?: number; pageSize?: number; limit?: number }): Promise<any> => {
+    return api.get('/laundry/zk/custody-transfers/logs', { params }).then(res => res.data);
+  },
+  getCustodyStats: async (): Promise<any> => {
+    return api.get('/laundry/zk/custody-stats').then(res => res.data);
+  },
+  getCustodyDepartments: async (): Promise<any> => {
+    return api.get('/laundry/zk/custody-departments').then(res => res.data);
   },
 };
 

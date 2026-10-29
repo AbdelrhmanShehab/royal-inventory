@@ -12,10 +12,9 @@ export const Card: React.FC<CardProps> & {
   Footer: React.FC<React.HTMLAttributes<HTMLDivElement>>;
 } = ({ children, hoverable = false, className = '', ...props }) => {
   return (
-    <div 
-      className={`bg-white border border-slate-200/80 rounded-xl shadow-xs overflow-hidden transition-all duration-200 ${
-        hoverable ? 'hover:shadow-md hover:-translate-y-0.5 hover:border-slate-300' : ''
-      } ${className}`} 
+    <div
+      className={`bg-white border border-slate-200/80 rounded-xl shadow-xs overflow-hidden transition-all duration-200 ${hoverable ? 'hover:shadow-md hover:-translate-y-0.5 hover:border-slate-300' : ''
+        } ${className}`}
       {...props}
     >
       {children}

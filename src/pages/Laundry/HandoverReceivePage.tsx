@@ -16,13 +16,15 @@ import {
   Shirt,
   Receipt,
   PackageCheck,
-  Info
+  Info,
+  ArrowRightLeft
 } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import Loader from '../../components/ui/Loader';
 import { laundryApi } from '../../api/laundry.api';
+import { useAuth } from '../../context/AuthContext';
 
 interface CustodyItem {
   userItemId: number;
@@ -67,6 +69,7 @@ interface EmployeeTransaction {
 export const HandoverReceivePage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
 
   // Mode: Standby (waiting for biometric fingerprint) vs Active (employee recognized)
   const [employee, setEmployee] = useState<EmployeeInfo | null>(null);
@@ -616,6 +619,17 @@ export const HandoverReceivePage: React.FC = () => {
             موجودات المغسلة الآن
           </Button>
 
+          {hasPermission('transfer_laundry_custody') && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => navigate('/laundry/custody-transfer')}
+              className="text-xs font-bold text-indigo-700 bg-indigo-50 border-indigo-200 hover:bg-indigo-100 flex items-center gap-1.5 shadow-2xs"
+            >
+              <ArrowRightLeft size={14} className="text-indigo-600" />
+              نقل وإعادة تخصيص العهد
+            </Button>
+          )}
           <Button 
             variant="outline" 
             size="sm" 
@@ -890,18 +904,66 @@ export const HandoverReceivePage: React.FC = () => {
               {/* Items Chips Breakdown */}
               {custodyAnalysis.totalInLaundry > 0 ? (
                 <div className="flex flex-wrap gap-2.5 items-center">
-                  {custodyAnalysis.inLaundry.map((itm, idx) => (
-                    <div 
-                      key={idx}
-                      className="flex items-center gap-2.5 bg-emerald-50 hover:bg-emerald-100/70 border border-emerald-200/90 px-4 py-2 rounded-xl transition-all shadow-2xs"
-                    >
-                      <Shirt size={18} className="text-emerald-700 shrink-0" />
-                      <span className="font-black text-slate-900 text-sm sm:text-base">{itm.itemName}</span>
-                      <span className="text-xs font-black text-emerald-800 bg-white border border-emerald-200 px-2.5 py-0.5 rounded-lg shadow-2xs">
-                        {itm.qty} قطعة
-                      </span>
-                    </div>
-                  ))}
+                  {custodyAnalysis.inLaundry.map((itm, idx) => {
+                    const isSelected = selectedItemCode === itm.itemCode && currentAction === 'Handover';
+
+                    return (
+                      <button 
+                        key={itm.userItemId || itm.itemCode || idx}
+                        type="button"
+                        onClick={() => {
+                          handleActionChange('Handover');
+                          setSelectedItemCode(itm.itemCode);
+                          const itemIndex = custodyItems.findIndex(c => c.itemCode === itm.itemCode);
+                          if (itemIndex >= 0) {
+                            setItemsPage(Math.floor(itemIndex / itemsPerPage) + 1);
+                          }
+                        }}
+                        title={`اضغط لاختيار وتسليم هذا الصنف فوراً: ${itm.itemName} (${itm.itemCode})`}
+                        className={`group flex items-center gap-2.5 px-3.5 py-2 rounded-xl transition-all cursor-pointer border text-right ${
+                          isSelected
+                            ? 'bg-emerald-600 text-white border-emerald-700 shadow-md ring-2 ring-emerald-400 scale-[1.02]'
+                            : 'bg-emerald-50/90 hover:bg-emerald-100/90 border-emerald-200/90 text-slate-900 shadow-2xs hover:scale-[1.01]'
+                        }`}
+                      >
+                        <Shirt 
+                          size={18} 
+                          className={`shrink-0 transition-colors ${
+                            isSelected ? 'text-white' : 'text-emerald-700 group-hover:text-emerald-800'
+                          }`} 
+                        />
+                        
+                        <div className="flex items-center gap-2">
+                          <span className={`font-black text-sm sm:text-base ${
+                            isSelected ? 'text-white' : 'text-slate-900'
+                          }`}>
+                            {itm.itemName}
+                          </span>
+
+                          {itm.itemCode && (
+                            <span 
+                              dir="ltr"
+                              className={`font-mono font-black text-xs sm:text-sm px-2.5 py-0.5 rounded-lg border shadow-2xs transition-colors ${
+                                isSelected
+                                  ? 'bg-white text-emerald-800 border-white'
+                                  : 'bg-white text-emerald-900 border-emerald-300 group-hover:border-emerald-400'
+                              }`}
+                            >
+                              {itm.itemCode}
+                            </span>
+                          )}
+                        </div>
+
+                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md border transition-colors ${
+                          isSelected
+                            ? 'bg-emerald-700 text-emerald-100 border-emerald-500'
+                            : 'bg-emerald-100/70 text-emerald-800 border-emerald-200 group-hover:bg-emerald-200/80'
+                        }`}>
+                          {isSelected ? 'محدد للتسليم ✓' : 'تسليم ←'}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="flex items-center gap-3 p-4 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-bold text-slate-600">
@@ -1158,7 +1220,13 @@ export const HandoverReceivePage: React.FC = () => {
               <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
                 <CheckCircle2 size={20} className={currentAction === 'Receive' ? 'text-emerald-600' : 'text-blue-600'} />
                 <span>
-                  الصنف المحدد: <strong className="text-base text-blue-700">{custodyItems.find(c => c.itemCode === selectedItemCode)?.itemName || 'لم يتم اختيار صنف'}</strong> (1 قطعة)
+                  الصنف المحدد: <strong className="text-base text-blue-700">
+                    {(() => {
+                      const selected = custodyItems.find(c => c.itemCode === selectedItemCode);
+                      if (!selected) return 'لم يتم اختيار صنف';
+                      return `${selected.itemName} (${selected.itemCode})`;
+                    })()}
+                  </strong> (1 قطعة)
                 </span>
               </div>
 

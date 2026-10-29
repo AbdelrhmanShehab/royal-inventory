@@ -174,6 +174,43 @@ const linkTicketEmployeeSchema = Joi.object({
   zkUserId: Joi.number().integer().positive().max(2147483647).required(),
 });
 
+const transferCustodySchema = Joi.object({
+  itemCode: Joi.string().max(50).required().messages({
+    'any.required': 'كود الصنف مطلوب',
+    'string.empty': 'كود الصنف مطلوب',
+  }),
+  fromUserId: Joi.number().integer().positive().max(2147483647).required().messages({
+    'any.required': 'الموظف الحالي مطلوب',
+  }),
+  toUserId: Joi.number().integer().positive().max(2147483647).required().messages({
+    'any.required': 'الموظف الجديد المستلم مطلوب',
+  }),
+  reason: Joi.string().max(500).allow(null, ''),
+});
+
+const createCustodyItemSchema = Joi.object({
+  itemCode: Joi.string().trim().max(50).required().messages({
+    'any.required': 'كود العهدة مطلوب',
+    'string.empty': 'كود العهدة مطلوب',
+  }),
+  itemId: Joi.number().integer().positive().required().messages({
+    'any.required': 'نوع العهدة مطلوب',
+  }),
+  userId: Joi.number().integer().positive().allow(null, '').optional(),
+  notes: Joi.string().max(500).allow(null, '').optional(),
+});
+
+const unassignCustodySchema = Joi.object({
+  reason: Joi.string().max(500).allow(null, '').optional(),
+});
+
+const assignCustodySchema = Joi.object({
+  toUserId: Joi.number().integer().positive().required().messages({
+    'any.required': 'الموظف المستلم مطلوب',
+  }),
+  notes: Joi.string().max(500).allow(null, '').optional(),
+});
+
 module.exports = {
   linkTicketEmployeeSchema,
   createMachineSchema,
@@ -190,4 +227,8 @@ module.exports = {
   updateTicketStatusSchema,
   classifyChemicalSchema,
   createHandoverTxnSchema,
+  transferCustodySchema,
+  createCustodyItemSchema,
+  unassignCustodySchema,
+  assignCustodySchema,
 };

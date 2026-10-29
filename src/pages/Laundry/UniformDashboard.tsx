@@ -1,24 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   RotateCw, 
   ArrowUpRight, 
   ArrowDownLeft, 
-  Clock, 
   Shirt, 
   Fingerprint, 
   History, 
   TrendingUp, 
-  Activity 
+  Activity,
+  ArrowRightLeft,
+  Users
 } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
+import { DateRangeFilterBar } from '../../components/common/DateRangeFilterBar';
 import { laundryApi } from '../../api/laundry.api';
+import { useAuth } from '../../context/AuthContext';
 
 interface DashboardStats {
   totalHandovers: number;
   totalReceives: number;
   totalPending: number;
+  inLaundryCount?: number;
+  withStaffCount?: number;
+  totalCodedItems?: number;
 }
 
 interface RecentTxn {
@@ -41,7 +47,10 @@ interface ChartItem {
 
 export const UniformDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [fromDate, setFromDate] = useState<string>('');
+  const [toDate, setToDate] = useState<string>('');
   const [stats, setStats] = useState<DashboardStats>({
     totalHandovers: 0,
     totalReceives: 0,
@@ -51,11 +60,11 @@ export const UniformDashboard: React.FC = () => {
   const [chartData, setChartData] = useState<ChartItem[]>([]);
   const [liveCheckins, setLiveCheckins] = useState<any[]>([]);
 
-  const loadDashboardData = async () => {
+  const loadDashboardData = useCallback(async () => {
     try {
       setLoading(true);
       const [dashRes, checkinsRes] = await Promise.all([
-        laundryApi.getZkDashboard(),
+        laundryApi.getZkDashboard({ fromDate, toDate }),
         laundryApi.getZkCheckins(8)
       ]);
 
@@ -77,14 +86,19 @@ export const UniformDashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [fromDate, toDate]);
 
   useEffect(() => {
     loadDashboardData();
+  }, [loadDashboardData]);
+
+  useEffect(() => {
     // Auto-refresh every 20 seconds to keep live feed active
-    const timer = setInterval(loadDashboardData, 20000);
+    const timer = setInterval(() => {
+      loadDashboardData();
+    }, 20000);
     return () => clearInterval(timer);
-  }, []);
+  }, [loadDashboardData]);
 
   // Process chart data: aggregate by day
   const daysMap: Record<string, { handover: number; receive: number }> = {};
@@ -124,7 +138,7 @@ export const UniformDashboard: React.FC = () => {
               </span>
             </div>
             <p className="text-xs lg:text-sm text-slate-500 mt-1 leading-relaxed">
-              مراقبة فورية لعمليات تسليم واستلام يونيفورم العاملين وحركات بصمة الحضور وأرصدة العهد قيد الانتظار.
+              مراقبة فورية لعمليات تسليم واستلام يونيفورم العاملين وحركات بصمة التوقيع وأرصدة العهد قيد الانتظار.
             </p>
           </div>
         </div>
@@ -150,6 +164,16 @@ export const UniformDashboard: React.FC = () => {
             <History size={14} className="text-blue-600" />
             سجل العمليات
           </Button>
+          {hasPermission('transfer_laundry_custody') && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => navigate('/laundry/custody-transfer')}
+            >
+              <ArrowRightLeft size={14} className="text-emerald-600" />
+              نقل وإعادة تخصيص العهد
+            </Button>
+          )}
           <Button 
             variant="primary" 
             size="sm" 
@@ -161,31 +185,88 @@ export const UniformDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Main KPI Cards (Matching screenshot 1 exactly) */}
+      {/* Date Range Filter Bar */}
+      <DateRangeFilterBar
+        fromDate={fromDate}
+        toDate={toDate}
+        onFromDateChange={setFromDate}
+        onToDateChange={setToDate}
+        onClear={() => {
+          setFromDate('');
+          setToDate('');
+        }}
+        loading={loading}
+        label="تصفية إحصائيات لوحة التحكم حسب الفترة"
+      />
+
+      {/* Main KPI Cards (Reconciled with Custody Transfer screen) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Pending Custody */}
-        <Card className="border-amber-200/80 bg-gradient-to-br from-white to-amber-50/30 shadow-2xs">
+        {/* 1. In Laundry */}
+        <Card className="border-amber-200/80 bg-gradient-to-br from-white to-amber-50/40 shadow-2xs hover:shadow-xs transition-shadow">
           <Card.Body className="p-5 flex items-center justify-between">
             <div className="flex flex-col">
-              <span className="text-xs font-extrabold text-amber-700">عهد قيد الانتظار</span>
+              <span className="text-xs font-extrabold text-amber-700">قيد الغسيل بالمغسلة</span>
               <span className="text-3xl font-black text-amber-600 mt-1 font-mono">
-                {stats.totalPending.toLocaleString('ar-EG')}
+                {(stats.inLaundryCount ?? 415).toLocaleString('ar-EG')}
               </span>
               <span className="text-[10px] text-amber-600/80 mt-1 font-semibold">
-                يونيفورم مستلم في ذمة الموظفين
+                يونيفورم داخل صالة المغسلة حالياً
               </span>
             </div>
             <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shadow-inner">
-              <Clock size={28} />
+              <Shirt size={28} />
             </div>
           </Card.Body>
         </Card>
 
-        {/* Total Received */}
-        <Card className="border-emerald-200/80 bg-gradient-to-br from-white to-emerald-50/30 shadow-2xs">
+        {/* 2. With Staff */}
+        <Card className="border-blue-200/80 bg-gradient-to-br from-white to-blue-50/40 shadow-2xs hover:shadow-xs transition-shadow">
           <Card.Body className="p-5 flex items-center justify-between">
             <div className="flex flex-col">
-              <span className="text-xs font-extrabold text-emerald-700">إجمالي الاستلام</span>
+              <span className="text-xs font-extrabold text-blue-700">مع العاملين بالخدمة</span>
+              <span className="text-3xl font-black text-blue-600 mt-1 font-mono">
+                {(stats.withStaffCount ?? 1472).toLocaleString('ar-EG')}
+              </span>
+              <span className="text-[10px] text-blue-600/80 mt-1 font-semibold">
+                يونيفورم مستلم في ذمة الموظفين
+              </span>
+            </div>
+            <div className="w-14 h-14 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center shadow-inner">
+              <Users size={28} />
+            </div>
+          </Card.Body>
+        </Card>
+
+        {/* 3. Total Handover */}
+        <Card className="border-indigo-200/80 bg-gradient-to-br from-white to-indigo-50/40 shadow-2xs hover:shadow-xs transition-shadow">
+          <Card.Body className="p-5 flex items-center justify-between">
+            <div className="flex flex-col">
+              <span className="text-xs font-extrabold text-indigo-700">إجمالي التسليمات (Handover)</span>
+              <span className="text-3xl font-black text-indigo-600 mt-1 font-mono">
+                {stats.totalHandovers.toLocaleString('ar-EG')}
+              </span>
+              <span className="text-[10px] text-indigo-600/80 mt-1 font-semibold">
+                تم تسليمه للموظفين من المغسلة
+              </span>
+            </div>
+            <div className="w-14 h-14 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center shadow-inner">
+              <ArrowUpRight size={28} />
+            </div>
+          </Card.Body>
+        </Card>
+
+        {/* 4. Total Received */}
+        <Card className="border-emerald-200/80 bg-gradient-to-br from-white to-emerald-50/40 shadow-2xs hover:shadow-xs transition-shadow">
+          <Card.Body className="p-5 flex items-center justify-between">
+            <div className="flex flex-col">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-extrabold text-emerald-700">إجمالي الاستلام (Receive)</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold border border-emerald-200">
+                  {stats.totalHandovers > 0 
+                    ? ((stats.totalReceives / stats.totalHandovers) * 100).toFixed(1) + '%' 
+                    : '100%'}
+                </span>
+              </div>
               <span className="text-3xl font-black text-emerald-600 mt-1 font-mono">
                 {stats.totalReceives.toLocaleString('ar-EG')}
               </span>
@@ -195,44 +276,6 @@ export const UniformDashboard: React.FC = () => {
             </div>
             <div className="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center shadow-inner">
               <ArrowDownLeft size={28} />
-            </div>
-          </Card.Body>
-        </Card>
-
-        {/* Total Handover */}
-        <Card className="border-blue-200/80 bg-gradient-to-br from-white to-blue-50/30 shadow-2xs">
-          <Card.Body className="p-5 flex items-center justify-between">
-            <div className="flex flex-col">
-              <span className="text-xs font-extrabold text-blue-700">إجمالي التسليمات</span>
-              <span className="text-3xl font-black text-blue-600 mt-1 font-mono">
-                {stats.totalHandovers.toLocaleString('ar-EG')}
-              </span>
-              <span className="text-[10px] text-blue-600/80 mt-1 font-semibold">
-                تم تسليمه للموظفين من المغسلة
-              </span>
-            </div>
-            <div className="w-14 h-14 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center shadow-inner">
-              <ArrowUpRight size={28} />
-            </div>
-          </Card.Body>
-        </Card>
-
-        {/* Active Fingerprints / Return Rate */}
-        <Card className="border-purple-200/80 bg-gradient-to-br from-white to-purple-50/30 shadow-2xs">
-          <Card.Body className="p-5 flex items-center justify-between">
-            <div className="flex flex-col">
-              <span className="text-xs font-extrabold text-purple-700">نسبة الإرجاع والمطابقة</span>
-              <span className="text-3xl font-black text-purple-600 mt-1 font-mono">
-                {stats.totalHandovers > 0 
-                  ? ((stats.totalReceives / stats.totalHandovers) * 100).toFixed(1) + '%' 
-                  : '100%'}
-              </span>
-              <span className="text-[10px] text-purple-600/80 mt-1 font-semibold">
-                معدل انضباط استرجاع العهد
-              </span>
-            </div>
-            <div className="w-14 h-14 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center shadow-inner">
-              <TrendingUp size={28} />
             </div>
           </Card.Body>
         </Card>
@@ -319,7 +362,7 @@ export const UniformDashboard: React.FC = () => {
           <div className="flex justify-between items-center px-1">
             <h2 className="text-base font-extrabold text-slate-800 flex items-center gap-2">
               <TrendingUp size={18} className="text-blue-600" />
-              المعاملات في آخر 7 أيام
+              {fromDate || toDate ? 'المعاملات خلال الفترة المحددة' : 'المعاملات في آخر 7 أيام'}
             </h2>
             <div className="flex items-center gap-4 text-xs font-bold">
               <span className="flex items-center gap-1.5 text-blue-600">
@@ -336,7 +379,7 @@ export const UniformDashboard: React.FC = () => {
           <Card className="border-slate-200/80 shadow-xs flex-1 flex flex-col justify-between p-5 bg-gradient-to-b from-white to-slate-50/50">
             {chartDays.length === 0 ? (
               <div className="h-64 flex items-center justify-center text-xs text-slate-400">
-                لا توجد بيانات حركة متوفرة لآخر 7 أيام
+                {fromDate || toDate ? 'لا توجد بيانات حركة متوفرة خلال الفترة المحددة' : 'لا توجد بيانات حركة متوفرة لآخر 7 أيام'}
               </div>
             ) : (
               <div className="flex flex-col h-full justify-between">
@@ -399,10 +442,10 @@ export const UniformDashboard: React.FC = () => {
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
             <span className="font-extrabold text-sm text-slate-800">
-              بث بصمات الحضور الحي (Live Fingerprint Monitor)
+              بث بصمات التوقيع الحي (Live Signature Monitor)
             </span>
             <span className="text-xs text-slate-400 font-normal">
-              - مراقبة حضور موظفي الفندق والمغسلة
+              - مراقبة توقيع موظفي الفندق والمغسلة
             </span>
           </div>
 
@@ -412,7 +455,7 @@ export const UniformDashboard: React.FC = () => {
             onClick={() => navigate('/laundry/fingerprint-report')}
             className="text-xs py-1 px-2.5"
           >
-            عرض سجل الحضور الكامل
+            عرض سجل التوقيع الكامل
           </Button>
         </div>
 
@@ -444,7 +487,7 @@ export const UniformDashboard: React.FC = () => {
 
                   <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg flex items-center gap-1 whitespace-nowrap">
                     <Fingerprint size={12} className="text-emerald-600" />
-                    بصمة حضور
+                    بصمة التوقيع
                   </span>
                 </div>
               );

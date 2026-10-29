@@ -25,6 +25,7 @@ import FingerprintReportPage from "../pages/Laundry/FingerprintReportPage";
 import HandoverReportPage from "../pages/Laundry/HandoverReportPage";
 import LaundryTicketsPage from "../pages/Laundry/LaundryTicketsPage";
 import InLaundryReportPage from "../pages/Laundry/InLaundryReportPage";
+import CustodyTransferPage from "../pages/Laundry/CustodyTransferPage";
 
 export const router = createBrowserRouter([
   {
@@ -161,6 +162,14 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute anyPermission={["view_laundry", "manage_laundry_operations", "receive_laundry_items"]}>
             <HandoverReceivePage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "laundry/custody-transfer",
+        element: (
+          <ProtectedRoute permission="transfer_laundry_custody">
+            <CustodyTransferPage />
           </ProtectedRoute>
         ),
       },

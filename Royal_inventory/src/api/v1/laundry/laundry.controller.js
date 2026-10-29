@@ -225,17 +225,27 @@ const getLaundryStock = asyncHandler(async (req, res) => {
 // ─── 10. ZK FINGERPRINT HANDOVER & CUSTODY ─────────────────────────────────────
 
 const getLatestZkCheckins = asyncHandler(async (req, res) => {
-  const limit = req.query.limit ? parseInt(req.query.limit) : 50;
-  const result = await service.getLatestZkCheckins(limit);
+  const { page, pageSize, limit, fromDate, toDate, search } = req.query;
+  const result = await service.getLatestZkCheckins({
+    page: page ? parseInt(page, 10) : undefined,
+    pageSize: pageSize ? parseInt(pageSize, 10) : (limit ? parseInt(limit, 10) : 50),
+    limit: limit ? parseInt(limit, 10) : undefined,
+    fromDate,
+    toDate,
+    search,
+  });
   return R.success(res, result, 'تم جلب آخر عمليات البصمة بنجاح');
 });
 
 const getZkTransactions = asyncHandler(async (req, res) => {
-  const { limit, action, search } = req.query;
+  const { page, pageSize, limit, action, search, fromDate, toDate } = req.query;
   const result = await service.getZkTransactions({
-    limit: limit ? parseInt(limit) : 100,
+    page: page ? parseInt(page, 10) : 1,
+    pageSize: pageSize ? parseInt(pageSize, 10) : (limit ? parseInt(limit, 10) : 50),
     action,
     search,
+    fromDate,
+    toDate,
   });
   return R.success(res, result, 'تم جلب سجل المعاملات بنجاح');
 });
@@ -260,7 +270,8 @@ const createZkHandoverTxn = asyncHandler(async (req, res) => {
 });
 
 const getZkHandoverDashboard = asyncHandler(async (req, res) => {
-  const result = await service.getZkHandoverDashboard();
+  const { fromDate, toDate } = req.query;
+  const result = await service.getZkHandoverDashboard({ fromDate, toDate });
   return R.success(res, result, 'تم جلب بيانات لوحة التحكم بنجاح');
 });
 
@@ -279,6 +290,83 @@ const getInLaundryInventory = asyncHandler(async (req, res) => {
 const linkTicketEmployee = asyncHandler(async (req, res) => {
   const result = await service.linkTicketEmployee(Number(req.params.id), req.body.zkUserId, req.user.id);
   return R.success(res, result, 'تم ربط التذكرة بالموظف');
+});
+
+const getAllCustodyItems = asyncHandler(async (req, res) => {
+  const { department, itemName, search, assignmentStatus, status, laundryStatus, page, pageSize, limit } = req.query;
+  const result = await service.getAllCustodyItems({
+    department,
+    itemName,
+    search,
+    assignmentStatus,
+    laundryStatus: laundryStatus || status,
+    page: page ? parseInt(page, 10) : 1,
+    pageSize: pageSize ? parseInt(pageSize, 10) : (limit ? parseInt(limit, 10) : 20),
+  });
+  return R.success(res, result.items, 'تم جلب قائمة عهد الأصناف بنجاح', 200, result.pagination);
+});
+
+const getCustodyItemByCode = asyncHandler(async (req, res) => {
+  const { itemCode } = req.params;
+  const result = await service.getCustodyItemByCode(itemCode);
+  return R.success(res, result, 'تم جلب تفاصيل صنف العهدة وسجل تتبعه بنجاح');
+});
+
+const transferCustodyItem = asyncHandler(async (req, res) => {
+  const result = await service.transferCustodyItem(req.user, req.body);
+  return R.success(res, result, 'تم نقل وتخصيص عهدة الصنف بنجاح وتسجيل حركة التدقيق');
+});
+
+const getCustodyTransferLogs = asyncHandler(async (req, res) => {
+  const { search, itemCode, userId, fromDate, toDate, page, pageSize, limit } = req.query;
+  const result = await service.getCustodyTransferLogs({
+    search,
+    itemCode,
+    userId,
+    fromDate,
+    toDate,
+    page: page ? parseInt(page, 10) : 1,
+    pageSize: pageSize ? parseInt(pageSize, 10) : (limit ? parseInt(limit, 10) : 20),
+  });
+  return R.success(res, result.logs, 'تم جلب سجل تدقيق تحويلات العهد بنجاح', 200, result.pagination);
+});
+
+const getCustodyStats = asyncHandler(async (_req, res) => {
+  const result = await service.getCustodyStats();
+  return R.success(res, result, 'تم جلب إحصائيات عهد اليونيفورم بنجاح');
+});
+
+const getDepartmentsList = asyncHandler(async (_req, res) => {
+  const result = await service.getDepartmentsList();
+  return R.success(res, result, 'تم جلب قائمة الأقسام بنجاح');
+});
+
+const getItemDefinitions = asyncHandler(async (_req, res) => {
+  const result = await service.getItemDefinitions();
+  return R.success(res, result, 'تم جلب تعريفات أصناف العهد بنجاح');
+});
+
+const createCustodyItem = asyncHandler(async (req, res) => {
+  const result = await service.createCustodyItem(req.user, req.body);
+  return R.created(res, result, 'تم تكويد وحفظ العهدة الجديدة بنجاح');
+});
+
+const unassignCustodyItem = asyncHandler(async (req, res) => {
+  const { itemCode } = req.params;
+  const result = await service.unassignCustodyItem(req.user, itemCode, req.body);
+  return R.success(res, result, 'تم فك تخصيص العهدة بنجاح وأصبحت حرة بالمخزن');
+});
+
+const assignCustodyItem = asyncHandler(async (req, res) => {
+  const { itemCode } = req.params;
+  const result = await service.assignCustodyItem(req.user, itemCode, req.body);
+  return R.success(res, result, 'تم تخصيص العهدة للموظف بنجاح');
+});
+
+const deleteCustodyItem = asyncHandler(async (req, res) => {
+  const { itemCode } = req.params;
+  const result = await service.deleteCustodyItem(req.user, itemCode);
+  return R.success(res, result, 'تم حذف العهدة بنجاح');
 });
 
 module.exports = {
@@ -328,4 +416,15 @@ module.exports = {
   getZkHandoverDashboard,
   getUnifiedDashboardSummary,
   getInLaundryInventory,
+  getAllCustodyItems,
+  getCustodyItemByCode,
+  createCustodyItem,
+  unassignCustodyItem,
+  assignCustodyItem,
+  deleteCustodyItem,
+  transferCustodyItem,
+  getCustodyTransferLogs,
+  getCustodyStats,
+  getItemDefinitions,
+  getDepartmentsList,
 };

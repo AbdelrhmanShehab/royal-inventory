@@ -147,24 +147,28 @@ const authorizeWarehouseScope = (req, res, next) => {
 };
 
 /**
- * authorizePermission(permKey) — DB-driven permission check.
+ * authorizePermission(...permKeys) — DB-driven permission check.
  * Reads from ops.role_permissions table (cached in memory, 5-min TTL).
  * Falls back to deny-all if DB is unreachable.
+ * Admin role bypasses check.
  *
  * Usage:
  *   router.post('/submit', authenticate, authorizePermission('submit_approval'), ...);
  */
-const authorizePermission = (permKey) => async (req, res, next) => {
+const authorizePermission = (...permKeys) => async (req, res, next) => {
   if (!req.user) return next(new AuthorizationError());
 
+  // Admin bypasses permission matrix check
+  if (req.user.role === 'admin') return next();
+
   try {
-    const allowed = await permissionsCache.hasPermission(req.user.role, permKey);
-    if (!allowed) {
-      return next(new AuthorizationError(
-        `الدور "${req.user.role}" لا يملك صلاحية: ${permKey}`
-      ));
+    for (const key of permKeys) {
+      const allowed = await permissionsCache.hasPermission(req.user.role, key);
+      if (allowed) return next();
     }
-    next();
+    return next(new AuthorizationError(
+      `الدور "${req.user.role}" لا يملك صلاحية: ${permKeys.join(' أو ')}`
+    ));
   } catch (err) {
     return next(new AuthorizationError('تعذّر التحقق من الصلاحيات — حاول مجدداً'));
   }

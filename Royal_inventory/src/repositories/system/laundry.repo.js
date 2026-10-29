@@ -1136,6 +1136,201 @@ const logLaundryAudit = async ({ userId, action, entityType, entityId, oldState 
   }
 };
 
+// ─── 13.1 CUSTODY TRANSFERS AUDIT LOGS ──────────────────────────────────────────
+
+let custodyTableEnsured = false;
+const ensureCustodyTransfersTable = async (client = null) => {
+  if (custodyTableEnsured) return;
+  try {
+    const db = client || getSystemDB();
+    await db.request().query(`
+      IF NOT EXISTS (SELECT 1 FROM sys.objects WHERE object_id = OBJECT_ID(N'ops.laundry_custody_transfers') AND type = 'U')
+      BEGIN
+          CREATE TABLE ops.laundry_custody_transfers (
+              transfer_id           INT IDENTITY(1,1) PRIMARY KEY,
+              item_code             NVARCHAR(50)    NOT NULL,
+              item_name             NVARCHAR(200)   NULL,
+              from_zk_user_id       INT             NOT NULL,
+              from_employee_name    NVARCHAR(150)   NULL,
+              from_badge            NVARCHAR(50)    NULL,
+              from_department       NVARCHAR(100)   NULL,
+              to_zk_user_id         INT             NOT NULL,
+              to_employee_name      NVARCHAR(150)   NULL,
+              to_badge              NVARCHAR(50)    NULL,
+              to_department         NVARCHAR(100)   NULL,
+              user_item_id          INT             NULL,
+              reason                NVARCHAR(500)   NULL,
+              transferred_by        INT             NOT NULL,
+              transferred_by_name   NVARCHAR(100)   NULL,
+              transferred_at        DATETIME2       NOT NULL DEFAULT GETDATE()
+          );
+          CREATE INDEX ix_custody_transfers_item ON ops.laundry_custody_transfers(item_code);
+          CREATE INDEX ix_custody_transfers_from_user ON ops.laundry_custody_transfers(from_zk_user_id);
+          CREATE INDEX ix_custody_transfers_to_user ON ops.laundry_custody_transfers(to_zk_user_id);
+          CREATE INDEX ix_custody_transfers_date ON ops.laundry_custody_transfers(transferred_at DESC);
+      END
+    `);
+    custodyTableEnsured = true;
+  } catch (err) {
+    console.error(`ensureCustodyTransfersTable warning: ${err.message}`);
+  }
+};
+
+const recordCustodyTransferLog = async (data, connection = null) => {
+  try {
+    const client = connection || getSystemDB();
+    await ensureCustodyTransfersTable(client);
+    const result = await client.request()
+      .input('itemCode', sql.NVarChar(50), data.itemCode)
+      .input('itemName', sql.NVarChar(200), data.itemName || null)
+      .input('fromZkUserId', sql.Int, data.fromZkUserId)
+      .input('fromEmployeeName', sql.NVarChar(150), data.fromEmployeeName || null)
+      .input('fromBadge', sql.NVarChar(50), data.fromBadge || null)
+      .input('fromDepartment', sql.NVarChar(100), data.fromDepartment || null)
+      .input('toZkUserId', sql.Int, data.toZkUserId)
+      .input('toEmployeeName', sql.NVarChar(150), data.toEmployeeName || null)
+      .input('toBadge', sql.NVarChar(50), data.toBadge || null)
+      .input('toDepartment', sql.NVarChar(100), data.toDepartment || null)
+      .input('userItemId', sql.Int, data.userItemId || null)
+      .input('reason', sql.NVarChar(500), data.reason || null)
+      .input('transferredBy', sql.Int, data.transferredBy)
+      .input('transferredByName', sql.NVarChar(100), data.transferredByName || null)
+      .query(`
+        INSERT INTO ops.laundry_custody_transfers (
+          item_code, item_name,
+          from_zk_user_id, from_employee_name, from_badge, from_department,
+          to_zk_user_id, to_employee_name, to_badge, to_department,
+          user_item_id, reason, transferred_by, transferred_by_name, transferred_at
+        )
+        OUTPUT INSERTED.transfer_id AS transferId
+        VALUES (
+          @itemCode, @itemName,
+          @fromZkUserId, @fromEmployeeName, @fromBadge, @fromDepartment,
+          @toZkUserId, @toEmployeeName, @toBadge, @toDepartment,
+          @userItemId, @reason, @transferredBy, @transferredByName, GETDATE()
+        )
+      `);
+    return result.recordset[0];
+  } catch (err) {
+    console.error(`recordCustodyTransferLog error: ${err.message}`);
+    return null;
+  }
+};
+
+const getCustodyTransferLogs = async ({ search, itemCode, userId, fromDate, toDate, page = 1, pageSize = 20, limit } = {}) => {
+  await ensureCustodyTransfersTable();
+  const pool = getSystemDB();
+
+  const p = Math.max(1, parseInt(page, 10) || 1);
+  const size = Math.min(100, Math.max(5, parseInt(pageSize || limit, 10) || 20));
+  const offset = (p - 1) * size;
+
+  let whereClause = 'WHERE 1=1';
+  const countReq = pool.request();
+  const dataReq = pool.request();
+
+  if (itemCode) {
+    whereClause += ' AND t.item_code = @itemCode';
+    countReq.input('itemCode', sql.NVarChar(50), itemCode);
+    dataReq.input('itemCode', sql.NVarChar(50), itemCode);
+  }
+  if (userId) {
+    whereClause += ' AND (t.from_zk_user_id = @userId OR t.to_zk_user_id = @userId)';
+    countReq.input('userId', sql.Int, userId);
+    dataReq.input('userId', sql.Int, userId);
+  }
+  if (fromDate) {
+    whereClause += ' AND t.transferred_at >= @fromDate';
+    countReq.input('fromDate', sql.DateTime2, new Date(fromDate));
+    dataReq.input('fromDate', sql.DateTime2, new Date(fromDate));
+  }
+  if (toDate) {
+    whereClause += ' AND t.transferred_at <= @toDate';
+    countReq.input('toDate', sql.DateTime2, new Date(toDate));
+    dataReq.input('toDate', sql.DateTime2, new Date(toDate));
+  }
+  if (search && search.trim()) {
+    whereClause += " AND (t.item_code LIKE '%' + @search + '%' OR t.item_name LIKE '%' + @search + '%' OR t.from_employee_name LIKE '%' + @search + '%' OR t.to_employee_name LIKE '%' + @search + '%' OR t.from_badge LIKE '%' + @search + '%' OR t.to_badge LIKE '%' + @search + '%')";
+    countReq.input('search', sql.NVarChar(100), search.trim());
+    dataReq.input('search', sql.NVarChar(100), search.trim());
+  }
+
+  const countResult = await countReq.query(`
+    SELECT COUNT(1) AS total
+    FROM ops.laundry_custody_transfers t
+    ${whereClause}
+  `);
+  const total = countResult.recordset[0]?.total || 0;
+
+  dataReq.input('offset', sql.Int, offset);
+  dataReq.input('pageSize', sql.Int, size);
+
+  const dataResult = await dataReq.query(`
+    SELECT 
+      t.transfer_id AS transferId,
+      t.item_code AS itemCode,
+      t.item_name AS itemName,
+      t.from_zk_user_id AS fromUserId,
+      t.from_employee_name AS fromEmployeeName,
+      t.from_badge AS fromBadge,
+      t.from_department AS fromDepartment,
+      t.to_zk_user_id AS toUserId,
+      t.to_employee_name AS toEmployeeName,
+      t.to_badge AS toBadge,
+      t.to_department AS toDepartment,
+      t.user_item_id AS userItemId,
+      t.reason,
+      t.transferred_by AS transferredBy,
+      t.transferred_by_name AS transferredByName,
+      t.transferred_at AS transferredAt
+    FROM ops.laundry_custody_transfers t
+    ${whereClause}
+    ORDER BY t.transferred_at DESC
+    OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
+  `);
+
+  return {
+    logs: dataResult.recordset,
+    pagination: {
+      page: p,
+      pageSize: size,
+      total,
+      totalPages: Math.ceil(total / size) || 1,
+      hasNextPage: p * size < total,
+      hasPrevPage: p > 1,
+    }
+  };
+};
+
+const getItemTransferHistory = async (itemCode) => {
+  await ensureCustodyTransfersTable();
+  const pool = getSystemDB();
+  const result = await pool.request()
+    .input('itemCode', sql.NVarChar(50), itemCode)
+    .query(`
+      SELECT 
+        transfer_id AS transferId,
+        item_code AS itemCode,
+        item_name AS itemName,
+        from_zk_user_id AS fromUserId,
+        from_employee_name AS fromEmployeeName,
+        from_badge AS fromBadge,
+        from_department AS fromDepartment,
+        to_zk_user_id AS toUserId,
+        to_employee_name AS toEmployeeName,
+        to_badge AS toBadge,
+        to_department AS toDepartment,
+        reason,
+        transferred_by_name AS transferredByName,
+        transferred_at AS transferredAt
+      FROM ops.laundry_custody_transfers
+      WHERE item_code = @itemCode
+      ORDER BY transferred_at DESC
+    `);
+  return result.recordset;
+};
+
+
 const deleteProgram = async (programId) => {
   const pool = getSystemDB();
   await pool.request()
@@ -1339,4 +1534,7 @@ module.exports = {
   updateChemicalClassification,
   getMachineById,
   getDashboardSummary,
+  recordCustodyTransferLog,
+  getCustodyTransferLogs,
+  getItemTransferHistory,
 };
