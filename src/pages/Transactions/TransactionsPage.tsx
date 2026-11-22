@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   History,
   ArrowUpDown,
-  Download
+  FileSpreadsheet
 } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
@@ -18,6 +18,7 @@ import { warehousesApi } from '../../api/warehouses.api';
 import { useWarehouseScope } from '../../hooks/useWarehouseScope';
 import type { TransferTransaction } from '../../types/transaction';
 import type { OrganizationNode } from '../../types/hierarchy';
+import { exportToModernExcel } from '../../utils/excelExport';
 
 export default function TransactionsPage() {
   const { currentNodeId, isGlobalAdmin, currentNodeName } = useWarehouseScope();
@@ -132,20 +133,39 @@ export default function TransactionsPage() {
     setIsDrawerOpen(true);
   };
 
-  // Export CSV
-  const handleExport = () => {
-    const headers = ['رقم الحركة,النوع,من,إلى,المرجع,المنشئ,التاريخ,الحالة,ملاحظات\n'];
-    const rows = filteredTxs.map(tx =>
-      `${tx.txnId},${tx.txnType},${getNodeName(tx.fromNodeId)},${getNodeName(tx.toNodeId)},${tx.referenceNo || ''},${tx.createdBy},${tx.createdAt},${tx.status},${tx.notes || ''}`
-    );
-    const blob = new Blob(['\uFEFF' + headers.concat(rows.join('\n'))], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `حركات_المخزون_${new Date().toISOString().substring(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  // Export Modern Excel Report
+  const handleExport = async () => {
+    await exportToModernExcel({
+      fileName: `تقرير_حركات_المخزون_${new Date().toISOString().substring(0, 10)}`,
+      reportTitle: 'تقرير تتبع الحركات والتحويلات المخزنية',
+      scopeName: currentNodeName || 'جميع المستودعات',
+      columns: [
+        { header: 'رقم الحركة', key: 'txnId', width: 14, align: 'center' },
+        { header: 'نوع الحركة', key: 'txnTypeLabel', width: 22, align: 'center' },
+        { header: 'مستودع المصدر', key: 'fromNode', width: 24, align: 'right' },
+        { header: 'مستودع الوجهة', key: 'toNode', width: 24, align: 'right' },
+        { header: 'رقم المرجع', key: 'referenceNo', width: 18, align: 'center' },
+        { header: 'المنشئ', key: 'createdBy', width: 18, align: 'right' },
+        { header: 'التاريخ والوقت', key: 'createdAt', width: 20, align: 'center' },
+        { header: 'الحالة', key: 'statusLabel', width: 18, align: 'center' },
+        { header: 'ملاحظات', key: 'notes', width: 26, align: 'right' },
+      ],
+      data: filteredTxs.map(tx => ({
+        txnId: `#${tx.txnId}`,
+        txnTypeLabel: txTypeNames[tx.txnType] || tx.txnType,
+        fromNode: getNodeName(tx.fromNodeId),
+        toNode: getNodeName(tx.toNodeId),
+        referenceNo: tx.referenceNo || '—',
+        createdBy: tx.createdBy || '—',
+        createdAt: tx.createdAt ? new Date(tx.createdAt).toLocaleString('ar-EG') : '—',
+        statusLabel: tx.status === 'confirmed' ? 'مكتمل ومؤكد' : tx.status === 'pending_approval' ? 'بانتظار الاعتماد' : tx.status === 'draft' ? 'مسودة' : tx.status === 'shipped' ? 'قيد التوصيل' : tx.status,
+        notes: tx.notes || '—'
+      })),
+      summaryRow: {
+        txnId: 'الإجمالي العام',
+        txnTypeLabel: `إجمالي الحركات: ${filteredTxs.length}`,
+      }
+    });
   };
 
   if (loading) {
@@ -180,9 +200,15 @@ export default function TransactionsPage() {
           </div>
           <div className="flex gap-2">
             <PermissionGate permission="view_reports">
-              <Button variant="outline" size="sm" onClick={handleExport} disabled={filteredTxs.length === 0}>
-                <Download size={14} />
-                تصدير تقرير الحركات
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExport}
+                disabled={filteredTxs.length === 0}
+                className="border-emerald-300 text-emerald-700 bg-emerald-50/60 hover:bg-emerald-100 hover:border-emerald-400 font-bold"
+              >
+                <FileSpreadsheet size={14} className="text-emerald-600" />
+                تصدير إكسيل (Excel)
               </Button>
             </PermissionGate>
           </div>

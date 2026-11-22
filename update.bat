@@ -300,17 +300,28 @@ echo.
 echo   Folder:  %CD%\deploy
 echo   Zip:     %CD%\deploy.zip (~42 MB)
 echo.
-echo   FAST TRANSFER TIP:
-echo     Copy "deploy.zip" to the server (takes ~5 seconds over network).
-echo     Extract it on the server, open the folder, and run:
-echo     install-service.bat (as Administrator)
-echo.
-echo   Access:
-echo     http://localhost:7575/
-echo     http://<SERVER_IP>:7575/
-echo     (Note: Unified production port is 7575, NOT 5173).
+echo   NEW AUTOMATION AVAILABLE:
+echo     You no longer need to copy zip, extract, or RDP to the server!
+echo     Target: http://192.168.50.5:7575/
 echo.
 echo ================================================================
 echo.
-if not defined NO_PAUSE pause
+
+if defined NO_PAUSE exit /b 0
+
+set "REPLY="
+set /p "REPLY=Would you like to deploy automatically to 192.168.50.5 right now? [Y/N] (default: Y): "
+if /i "%REPLY%"=="" set REPLY=Y
+if /i "%REPLY%"=="Y" (
+    echo.
+    echo Launching automated deployment to 192.168.50.5...
+    call "%~dp0deploy-to-server.bat" --skip-build
+    exit /b %errorlevel%
+)
+
+echo.
+echo Deployment to server skipped. You can deploy anytime using:
+echo   deploy-to-server.bat
+echo.
+pause
 exit /b 0

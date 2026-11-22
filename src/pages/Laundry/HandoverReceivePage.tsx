@@ -205,7 +205,7 @@ export const HandoverReceivePage: React.FC = () => {
       if (requestId !== employeeRequestRef.current) return;
 
       if (!data || !data.employee) {
-        setErrorMsg(`لم يتم العثور على موظف بالمعرف ${userIdToFetch} في قاعدة بيانات البصمة`);
+        setErrorMsg(`لم يتم العثور على موظف بالمعرّف ${userIdToFetch} في قاعدة بيانات البصمة`);
         return;
       }
 
@@ -233,7 +233,7 @@ export const HandoverReceivePage: React.FC = () => {
       if (requestId !== employeeRequestRef.current) return;
 
       // Smart default action and single item pre-selection:
-      // If employee has items in laundry, he came to receive them ("جاي يستلم") -> Action = 'Handover'
+      // If employee has items in laundry, he came to receive them → Action = 'Handover'
       const hasInLaundry = custody.some(isItemInLaundry);
       const defaultAction = hasInLaundry ? 'Handover' : 'Receive';
       setCurrentAction(defaultAction);
@@ -263,7 +263,7 @@ export const HandoverReceivePage: React.FC = () => {
 
   useEffect(() => {
     if (searchParams.has('userCode')) {
-      setErrorMsg('رابط كود البصمة قديم. ابحث عن الموظف واختره أو استخدم بصمة جديدة.');
+      setErrorMsg('رابط كود البصمة قديم. يُرجى البحث عن الموظف واختياره أو استخدام بصمة جديدة.');
       return;
     }
     const requestedId = Number(searchParams.get('userId'));
@@ -282,17 +282,39 @@ export const HandoverReceivePage: React.FC = () => {
 
       try {
         const res = await laundryApi.getZkCheckins(1);
-        const list = Array.isArray(res) ? res : (res?.data || []);
+        const list = Array.isArray(res)
+          ? res
+          : (Array.isArray(res?.items)
+              ? res.items
+              : (Array.isArray(res?.data?.items)
+                  ? res.data.items
+                  : (Array.isArray(res?.data)
+                      ? res.data
+                      : [])));
         
         if (list.length > 0) {
           const latest = list[0];
           const checkTime = latest.checkTime;
           const scanKey = JSON.stringify([latest.userId, checkTime, latest.sensorId, latest.serialNumber]);
 
-          // First run: just initialize baseline so we don't trigger on an old punch
+          // Calculate age of punch
+          const punchAgeMs = checkTime ? (Date.now() - new Date(checkTime).getTime()) : Infinity;
+
+          // First run: if employee scanned their finger within the last 30 seconds, recognize immediately!
+          // Otherwise, record baseline to avoid triggering on historic punches
           if (!initializedRef.current) {
             initializedRef.current = true;
             lastProcessedTimeRef.current = scanKey;
+
+            if (Math.abs(punchAgeMs) < 60000 && latest.userId) {
+              const punchTimeStr = new Date(checkTime).toLocaleTimeString('ar-EG', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+              });
+              await loadEmployeeDetails(latest.userId, true, punchTimeStr);
+            }
+
             isPolling = false;
             return;
           }
@@ -350,7 +372,7 @@ export const HandoverReceivePage: React.FC = () => {
     setSearchParams({});
   };
 
-  // Analyze items in laundry vs with employee for instant "ليه عندنا إيه" display
+  // Analyze items in laundry vs with employee for instant status display
   const custodyAnalysis = React.useMemo(() => {
     const inLaundry: { itemName: string; itemCode: string; qty: number; userItemId: number }[] = [];
     const withEmployee: { itemName: string; itemCode: string; qty: number; userItemId: number }[] = [];
@@ -360,7 +382,7 @@ export const HandoverReceivePage: React.FC = () => {
       // An item is in laundry if its latest action is 'Receive' (or receivedQty > handedOverQty)
       const isInLaundry = isItemInLaundry(c);
 
-      // If has had any activity but currently not in laundry → مع الموظف بره
+      // If has had any activity but currently not in laundry → مع الموظف
       const isWithEmployee = !isInLaundry && (c.handedOverQty > 0 || c.receivedQty > 0 || c.lastAction === 'Handover');
 
       if (isInLaundry) {
@@ -416,12 +438,12 @@ export const HandoverReceivePage: React.FC = () => {
   const handlePerformAction = async () => {
     if (transactionInFlightRef.current) return;
     if (!employee || !isBiometricVerified) {
-      setErrorMsg('عمليات التسليم والاستلام مقيدة بالبصمة الحية على جهاز المغسلة حصراً.');
+      setErrorMsg('عمليات التسليم والاستلام مقيّدة بالبصمة الحيّة على جهاز المغسلة حصراً.');
       return;
     }
 
     if (!selectedItemCode) {
-      setErrorMsg('يرجى اختيار صنف واحد لتأكيد العملية بالبصمة');
+      setErrorMsg('يُرجى اختيار صنف واحد لتأكيد العملية بالبصمة');
       return;
     }
 
@@ -471,11 +493,11 @@ export const HandoverReceivePage: React.FC = () => {
 
         if (remainingForAction.length > 0) {
           setSelectedItemCode(remainingForAction[0].itemCode);
-          setSuccessMsg(`تم تسجيل (${itemName}) بنجاح. يرجى وضع بصمة الموظف لتأكيد الصنف التالي.`);
+          setSuccessMsg(`تمّ تسجيل (${itemName}) بنجاح. يُرجى تسجيل بصمة الموظف لتأكيد الصنف التالي.`);
           setAutoResetTimer(null);
         } else {
           setSelectedItemCode(null);
-          setSuccessMsg(`تم بنجاح الانتهاء من جميع أصناف ${actionTitle} للموظف (${employee.name}).`);
+          setSuccessMsg(`تمّ بنجاح الانتهاء من جميع أصناف ${actionTitle} للموظف (${employee.name}).`);
           setAutoResetTimer(6);
         }
       }
@@ -522,11 +544,11 @@ export const HandoverReceivePage: React.FC = () => {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl lg:text-2xl font-black text-slate-900">
-                تسليم واستلام هدوم الموظفين
+                تسليم واستلام ملابس الموظفين
               </h1>
             </div>
             <p className="text-xs text-slate-500 font-bold mt-0.5">
-              بالبصمة فقط — ممنوع التسليم أو الاستلام يدوياً
+              بالبصمة فقط — لا يُسمح بالتسليم أو الاستلام يدوياً
             </p>
           </div>
         </div>
@@ -559,7 +581,7 @@ export const HandoverReceivePage: React.FC = () => {
             {searchResults.length > 0 && (
               <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden z-50 animate-fadeIn max-h-64 overflow-y-auto">
                 <div className="p-2 bg-slate-50 text-xs font-bold text-slate-600 border-b border-slate-100 flex justify-between">
-                  <span>الموظفين ({searchResults.length})</span>
+                  <span>الموظفون ({searchResults.length})</span>
                   <span className="text-blue-600">اضغط للاختيار</span>
                 </div>
                 {searchResults.map((emp) => (
@@ -575,10 +597,10 @@ export const HandoverReceivePage: React.FC = () => {
                   >
                     <div className="flex flex-col text-right">
                       <span className="font-bold text-slate-800 text-sm">{emp.name}</span>
-                      <span className="text-xs text-slate-400 font-mono">كود: {emp.userCode} · معرف: {emp.userId}</span>
+                      <span className="text-xs text-slate-400 font-mono">كود: {emp.userCode} · معرّف: {emp.userId}</span>
                     </div>
                     <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200">
-                      عرض الهدوم
+                      عرض الملابس
                     </span>
                   </button>
                 ))}
@@ -594,7 +616,7 @@ export const HandoverReceivePage: React.FC = () => {
             className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-bold text-slate-700 cursor-pointer transition-colors"
           >
             <span className={`w-3 h-3 rounded-full ${isListening ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`}></span>
-            <span>{isListening ? 'جهاز البصمة جاهز' : 'جهاز البصمة متوقف'}</span>
+            <span>{isListening ? 'جهاز البصمة جاهز' : 'جهاز البصمة متوقّف'}</span>
           </button>
 
           {employee && (
@@ -616,7 +638,7 @@ export const HandoverReceivePage: React.FC = () => {
             className="text-xs font-black text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100 flex items-center gap-1.5 shadow-2xs"
           >
             <Shirt size={14} className="text-blue-600" />
-            موجودات المغسلة الآن
+            محتويات المغسلة الآن
           </Button>
 
           {hasPermission('transfer_laundry_custody') && (
@@ -627,7 +649,7 @@ export const HandoverReceivePage: React.FC = () => {
               className="text-xs font-bold text-indigo-700 bg-indigo-50 border-indigo-200 hover:bg-indigo-100 flex items-center gap-1.5 shadow-2xs"
             >
               <ArrowRightLeft size={14} className="text-indigo-600" />
-              نقل وإعادة تخصيص العهد
+              نقل وإعادة تخصيص العُهَد
             </Button>
           )}
           <Button 
@@ -636,7 +658,7 @@ export const HandoverReceivePage: React.FC = () => {
             onClick={() => navigate('/laundry/uniform-dashboard')}
             className="text-xs font-bold"
           >
-            جدول العهد
+            جدول العُهَد
           </Button>
         </div>
       </div>
@@ -689,7 +711,7 @@ export const HandoverReceivePage: React.FC = () => {
                 <Search size={22} className="text-slate-400 shrink-0 mr-1" />
                 <input
                   type="text"
-                  placeholder="أو اكتب اسم الموظف أو الكود هنا..."
+                  placeholder="أو أدخل اسم الموظف أو الكود هنا..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full bg-transparent text-sm sm:text-base font-bold text-slate-800 focus:outline-none placeholder:text-slate-400"
@@ -711,7 +733,7 @@ export const HandoverReceivePage: React.FC = () => {
                 <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden z-50 animate-fadeIn max-h-72 overflow-y-auto">
                   <div className="p-3 bg-slate-50 border-b border-slate-100 text-xs font-bold text-slate-600 flex justify-between items-center">
                     <span>نتائج البحث ({searchResults.length} موظف)</span>
-                    <span className="text-blue-600 font-bold">اضغط لعرض الهدوم</span>
+                    <span className="text-blue-600 font-bold">اضغط لعرض الملابس</span>
                   </div>
                   <div className="divide-y divide-slate-100">
                     {searchResults.map((emp) => (
@@ -737,7 +759,7 @@ export const HandoverReceivePage: React.FC = () => {
                           </div>
                         </div>
                         <span className="text-xs font-bold text-blue-700 bg-blue-100/70 border border-blue-200 px-3.5 py-1.5 rounded-xl hover:bg-blue-600 hover:text-white transition-colors">
-                          عرض الهدوم ←
+                          عرض الملابس ←
                         </span>
                       </button>
                     ))}
@@ -759,16 +781,16 @@ export const HandoverReceivePage: React.FC = () => {
           </div>
 
           <h2 className="text-2xl sm:text-3xl font-black text-slate-900 mb-2">
-            حط صباع الموظف على جهاز البصمة
+            يُرجى تسجيل بصمة الموظف
           </h2>
           <p className="text-sm sm:text-base font-bold text-slate-500 max-w-md mx-auto leading-relaxed">
-            أول ما الموظف يبصم، هتفتح صفحته تلقائياً ونعرف هدومه اللي في المغسلة
+            بمجرد تسجيل البصمة، ستُعرض صفحة الموظف تلقائياً مع تفاصيل ملابسه الموجودة في المغسلة
           </p>
 
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
             <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300 text-xs font-bold">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              جهاز البصمة جاهز وشغال
+              جهاز البصمة جاهز ويعمل
             </span>
           </div>
 
@@ -776,7 +798,7 @@ export const HandoverReceivePage: React.FC = () => {
           <div className="mt-8 pt-6 border-t border-slate-200/70 w-full max-w-md text-center">
             <div className="inline-flex items-center gap-2.5 px-5 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs sm:text-sm font-bold text-amber-900 shadow-2xs">
               <Fingerprint size={20} className="text-amber-700 shrink-0" />
-              <span>تنبيه: التسليم والاستلام لا يعمل إلا ببصمة الموظف بنفسه</span>
+              <span>تنبيه: لا يتم التسليم أو الاستلام إلا ببصمة الموظف شخصياً</span>
             </div>
           </div>
         </div>
@@ -785,7 +807,7 @@ export const HandoverReceivePage: React.FC = () => {
       {/* Loading state */}
       {loading && (
         <div className="py-24 flex flex-col items-center justify-center bg-white rounded-3xl border border-slate-200 shadow-xs">
-          <Loader size="lg" label="جاري قراءة البيانات وعرض هدوم الموظف..." />
+          <Loader size="lg" label="جارٍ تحميل البيانات وعرض ملابس الموظف..." />
         </div>
       )}
 
@@ -812,7 +834,7 @@ export const HandoverReceivePage: React.FC = () => {
                 <div>
                   <div className="flex items-center gap-2.5">
                     <span className="text-base sm:text-lg font-black">
-                      {isBiometricVerified ? 'تمت قراءة البصمة بنجاح' : 'عرض بيانات فقط (في انتظار البصمة)'}
+                      {isBiometricVerified ? 'تمّ التحقق من البصمة بنجاح' : 'عرض بيانات فقط (في انتظار البصمة)'}
                     </span>
                     <span className={`text-xs px-2.5 py-0.5 rounded-full font-black ${
                       isBiometricVerified ? 'bg-emerald-200 text-emerald-900' : 'bg-amber-200 text-amber-900'
@@ -822,8 +844,8 @@ export const HandoverReceivePage: React.FC = () => {
                   </div>
                   <p className="text-xs font-bold opacity-80 mt-0.5">
                     {isBiometricVerified 
-                      ? (biometricTime ? `تمت البصمة الساعة ${biometricTime} — تقدر تسلّم أو تستلم دلوقتي` : 'تقدر دلوقتي تستلم أو تسلّم الهدوم')
-                      : 'أنت بتشوف الهدوم بس.. عشان تسلّم أو تستلم لازم الموظف يبصم بإصبعه على الجهاز'
+                      ? (biometricTime ? `تمّ تسجيل البصمة الساعة ${biometricTime} — يمكنكم الآن إجراء عملية التسليم أو الاستلام` : 'يمكنكم الآن إجراء عملية استلام أو تسليم الملابس')
+                      : 'هذا العرض للاطّلاع فقط.. لإتمام عملية التسليم أو الاستلام يجب تسجيل بصمة الموظف على جهاز البصمة'
                     }
                   </p>
                 </div>
@@ -834,7 +856,7 @@ export const HandoverReceivePage: React.FC = () => {
                   onClick={resetToStandby}
                   className="px-4 py-2 rounded-xl bg-white border border-slate-300 text-slate-800 hover:bg-slate-100 text-xs sm:text-sm font-black transition-colors shadow-2xs"
                 >
-                  إلغاء / موظف تاني
+                  إلغاء / موظف آخر
                 </button>
               </div>
             </div>
@@ -864,9 +886,9 @@ export const HandoverReceivePage: React.FC = () => {
                 </div>
 
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex flex-col">
-                  <span className="text-xs text-slate-400 font-bold">الهدوم المسجلة له</span>
+                  <span className="text-xs text-slate-400 font-bold">الملابس المسجّلة</span>
                   <span className="text-sm font-black text-purple-700 mt-1">
-                    {custodyItems.length} صنف يونيفورم
+                    {custodyItems.length} صنف زيّ رسمي
                   </span>
                 </div>
               </div>
@@ -874,7 +896,7 @@ export const HandoverReceivePage: React.FC = () => {
           </Card>
 
           {/* ─────────────────────────────────────────────────────────────
-              FAST SUMMARY: "ليه عندنا إيه بالمغسلة" (WHAT HE HAS IN LAUNDRY) - LIGHT & CLEAN THEME
+              FAST SUMMARY: ملابس الموظف في المغسلة (WHAT HE HAS IN LAUNDRY) - LIGHT & CLEAN THEME
              ───────────────────────────────────────────────────────────── */}
           <div className="rounded-3xl border-2 border-emerald-200/90 bg-white p-5 sm:p-6 shadow-xs overflow-hidden relative">
             <div className="relative z-10 flex flex-col gap-4">
@@ -885,10 +907,10 @@ export const HandoverReceivePage: React.FC = () => {
                   </div>
                   <div>
                     <h3 className="text-lg sm:text-xl font-black text-slate-900">
-                      هدوم الموظف الموجودة في المغسلة دلوقتي (ليه عندنا إيه):
+                      ملابس الموظف الموجودة في المغسلة حالياً:
                     </h3>
                     <p className="text-xs text-slate-500 font-bold mt-0.5">
-                      القطع المسجلة حالياً داخل المغسلة
+                      القطع المسجّلة حالياً داخل المغسلة
                     </p>
                   </div>
                 </div>
@@ -919,7 +941,7 @@ export const HandoverReceivePage: React.FC = () => {
                             setItemsPage(Math.floor(itemIndex / itemsPerPage) + 1);
                           }
                         }}
-                        title={`اضغط لاختيار وتسليم هذا الصنف فوراً: ${itm.itemName} (${itm.itemCode})`}
+                        title={`اضغط لاختيار وتسليم هذا الصنف: ${itm.itemName} (${itm.itemCode})`}
                         className={`group flex items-center gap-2.5 px-3.5 py-2 rounded-xl transition-all cursor-pointer border text-right ${
                           isSelected
                             ? 'bg-emerald-600 text-white border-emerald-700 shadow-md ring-2 ring-emerald-400 scale-[1.02]'
@@ -959,7 +981,7 @@ export const HandoverReceivePage: React.FC = () => {
                             ? 'bg-emerald-700 text-emerald-100 border-emerald-500'
                             : 'bg-emerald-100/70 text-emerald-800 border-emerald-200 group-hover:bg-emerald-200/80'
                         }`}>
-                          {isSelected ? 'محدد للتسليم ✓' : 'تسليم ←'}
+                          {isSelected ? 'محدّد للتسليم ✓' : 'تسليم ←'}
                         </span>
                       </button>
                     );
@@ -968,7 +990,7 @@ export const HandoverReceivePage: React.FC = () => {
               ) : (
                 <div className="flex items-center gap-3 p-4 rounded-2xl bg-slate-50 border border-slate-200 text-sm font-bold text-slate-600">
                   <CheckCircle2 size={22} className="text-emerald-600 shrink-0" />
-                  <span>مفيش أي هدوم للموظف في المغسلة حالياً (كل هدومه معاه بالخارج).</span>
+                  <span>لا توجد ملابس لهذا الموظف في المغسلة حالياً (جميع ملابسه بحوزته).</span>
                 </div>
               )}
 
@@ -977,7 +999,7 @@ export const HandoverReceivePage: React.FC = () => {
                 <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200">
                   <span className="text-slate-600 flex items-center gap-2 font-bold">
                     <PackageCheck size={18} className="text-blue-600" />
-                    <span>هدومه اللي معاه بره:</span>
+                    <span>ملابسه التي بحوزته:</span>
                   </span>
                   <span className="font-black font-mono text-blue-700 text-base">
                     {custodyAnalysis.totalWithEmployee} قطعة
@@ -988,7 +1010,7 @@ export const HandoverReceivePage: React.FC = () => {
                   <div className="flex items-center justify-between p-3.5 rounded-xl bg-amber-50 border border-amber-200">
                     <span className="text-amber-900 flex items-center gap-2 font-bold">
                       <Receipt size={18} className="text-amber-700" />
-                      <span>تذاكر غسيل خاصة:</span>
+                      <span>تذاكر غسيل خاصّة:</span>
                     </span>
                     <span className="font-black font-mono text-amber-800 text-sm">
                       {staffTickets.length} تذكرة
@@ -1011,11 +1033,11 @@ export const HandoverReceivePage: React.FC = () => {
                   <div className="flex items-center gap-2.5">
                     <Info size={20} className="text-amber-700 shrink-0" />
                     <span>
-                      تنبيه: أنت بتشوف الهدوم بس.. عشان تسلّم أو تستلم، لازم الموظف يحط إصبعه على جهاز البصمة.
+                      تنبيه: أنتم تعرضون الملابس فقط.. لإتمام عملية التسليم أو الاستلام، يجب تسجيل بصمة الموظف على جهاز البصمة.
                     </span>
                   </div>
                   <span className="text-xs px-2.5 py-1 rounded-lg bg-amber-100 text-amber-900 border border-amber-300 font-black shrink-0">
-                    لازم يبصم
+                    يجب التحقق بالبصمة
                   </span>
                 </div>
               )}
@@ -1027,7 +1049,7 @@ export const HandoverReceivePage: React.FC = () => {
              ───────────────────────────────────────────────────────────── */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             
-            {/* Option 1: Receive (استلام هدوم متسخة للغسيل) */}
+            {/* Option 1: Receive (استلام ملابس متسخة للغسيل) */}
             <div 
               onClick={() => handleActionChange('Receive')}
               className={`p-5 rounded-2xl border-2 cursor-pointer transition-all duration-200 flex items-center justify-between shadow-xs ${
@@ -1044,10 +1066,10 @@ export const HandoverReceivePage: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="text-lg font-black text-slate-900">
-                    استلام هدوم متسخة (للغسيل)
+                    استلام ملابس متّسخة (للغسيل)
                   </h3>
                   <p className="text-xs sm:text-sm font-bold text-slate-500 mt-0.5">
-                    الموظف جاب هدومه عشان نغسلها له
+                    الموظف أحضر ملابسه لغسلها
                   </p>
                 </div>
               </div>
@@ -1058,7 +1080,7 @@ export const HandoverReceivePage: React.FC = () => {
               </div>
             </div>
 
-            {/* Option 2: Handover (تسليم هدوم نظيفة للموظف) */}
+            {/* Option 2: Handover (تسليم ملابس نظيفة للموظف) */}
             <div 
               onClick={() => handleActionChange('Handover')}
               className={`p-5 rounded-2xl border-2 cursor-pointer transition-all duration-200 flex items-center justify-between shadow-xs ${
@@ -1075,10 +1097,10 @@ export const HandoverReceivePage: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="text-lg font-black text-slate-900">
-                    تسليم هدوم نظيفة (للموظف)
+                    تسليم ملابس نظيفة (للموظف)
                   </h3>
                   <p className="text-xs sm:text-sm font-bold text-slate-500 mt-0.5">
-                    الموظف هيستلم هدومه مغسولة ونظيفة
+                    الموظف سيستلم ملابسه مغسولة ونظيفة
                   </p>
                 </div>
               </div>
@@ -1101,14 +1123,14 @@ export const HandoverReceivePage: React.FC = () => {
 
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-slate-600 bg-white border border-slate-200 px-3 py-1 rounded-lg shadow-2xs">
-                  قطعة واحدة لكل بصمة منعاً للتلاعب
+                قطعة واحدة لكل بصمة منعاً للتلاعب
                 </span>
               </div>
             </div>
 
             {custodyItems.length === 0 ? (
               <div className="p-12 text-center text-sm font-bold text-slate-400">
-                لا توجد هدوم مسجلة لهذا الموظف في النظام.
+                لا توجد ملابس مسجّلة لهذا الموظف في النظام.
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -1118,7 +1140,7 @@ export const HandoverReceivePage: React.FC = () => {
                       <th className="py-3.5 px-4 w-12 text-center">اختيار</th>
                       <th className="py-3.5 px-4">الصنف</th>
                       <th className="py-3.5 px-4">الكود</th>
-                      <th className="py-3.5 px-4 text-center">مكانه فين دلوقتي؟</th>
+                      <th className="py-3.5 px-4 text-center">الموقع الحالي</th>
                       <th className="py-3.5 px-4 text-center w-32">الكمية للعملية</th>
                     </tr>
                   </thead>
@@ -1155,15 +1177,15 @@ export const HandoverReceivePage: React.FC = () => {
                             {isItemInLaundry(c) ? (
                               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-900 border border-emerald-300 shadow-2xs">
                                 <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span>
-                                في المغسلة عندنا
+                                في المغسلة
                               </span>
                             ) : (c.handedOverQty > 0 || c.receivedQty > 0 || c.lastAction === 'Handover') ? (
                               <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black bg-blue-100 text-blue-900 border border-blue-300">
-                                مع الموظف بره
+                                مع الموظف
                               </span>
                             ) : (
                               <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-slate-100 text-slate-500">
-                                جديد لم يُصرف
+                                جديد لم يُصرَف
                               </span>
                             )}
                           </td>
@@ -1237,7 +1259,7 @@ export const HandoverReceivePage: React.FC = () => {
                   disabled={submitting}
                   className="text-xs sm:text-sm font-bold"
                 >
-                  إلغاء وعودة للشاشة الرئيسية
+                  إلغاء والعودة للشاشة الرئيسية
                 </Button>
 
                 <Button
@@ -1255,9 +1277,9 @@ export const HandoverReceivePage: React.FC = () => {
                   <Fingerprint size={22} />
                   <span>
                     {submitting 
-                      ? 'جاري الحفظ...' 
+                      ? 'جارٍ الحفظ...' 
                       : !isBiometricVerified
-                        ? 'لازم الموظف يبصم الأول عشان تقدر تحفظ'
+                        ? 'يجب على الموظف تسجيل بصمته أولاً لإتمام الحفظ'
                         : currentAction === 'Receive'
                           ? 'تأكيد وحفظ استلام الصنف'
                           : 'تأكيد وحفظ تسليم الصنف'
@@ -1274,7 +1296,7 @@ export const HandoverReceivePage: React.FC = () => {
               <div className="p-4 bg-slate-50/70 border-b border-slate-200 flex justify-between items-center">
                 <div className="flex items-center gap-2 font-black text-sm text-slate-800">
                   <History size={18} className="text-blue-600" />
-                  <span>آخر العمليات اللي اتعملت للموظف ({employee.name})</span>
+                  <span>آخر العمليات المسجّلة للموظف ({employee.name})</span>
                 </div>
                 <span className="text-xs text-slate-500 font-bold">إجمالي {historyTxns.length} حركة</span>
               </div>

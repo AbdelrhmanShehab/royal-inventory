@@ -2,7 +2,6 @@
 
 /**
  * ZK Database Connection Pool Manager
- * Connects to the ZK fingerprint database (Zktime on 192.168.50.6)
  */
 
 const sql = require('mssql');

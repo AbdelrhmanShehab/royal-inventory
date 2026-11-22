@@ -88,6 +88,7 @@ export const TRANSFER_TYPES_CONFIG: Record<TransferType, {
 
 export const TRANSFER_PERMISSIONS = {
   CREATE_DRAFT: 'create_draft',
+  DIRECT_TRANSFER: 'direct_transfer',
   SUBMIT_APPROVAL: 'submit_approval',
   APPROVE_TRANSFER: 'approve_transfer',
   DISPATCH_TRANSFER: 'dispatch_transfer',

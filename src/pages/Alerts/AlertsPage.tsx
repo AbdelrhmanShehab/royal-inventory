@@ -4,8 +4,7 @@ import {
   AlertCircle, 
   PackageX, 
   RefreshCw, 
-  Download, 
-  Printer, 
+  FileSpreadsheet,
   Search, 
   ArrowLeftRight, 
   Building2, 
@@ -33,6 +32,7 @@ import type { StockAlertItem } from '../../types/alert';
 import type { OrganizationNode } from '../../types/hierarchy';
 import { useWarehouseScope } from '../../hooks/useWarehouseScope';
 import { getItemReorderLevel, setItemReorderLevel } from '../../utils/reorderLevels';
+import { exportToModernExcel } from '../../utils/excelExport';
 
 export default function AlertsPage() {
   const { currentNodeId, isGlobalAdmin, currentNodeName } = useWarehouseScope();
@@ -266,25 +266,53 @@ export default function AlertsPage() {
     }
   };
 
-  // Export CSV Report
-  const handleExportCSV = () => {
-    const headers = ['كود الصنف,اسم الصنف,الوحدة التشغيلية,الفئة,الرصيد المتاح,حد إعادة الطلب,كمية العجز,الكمية المقترحة للتزويد,الوحدة,الحالة\n'];
-    const rows = filteredAlerts.map(a => 
-      `${a.itemCode},"${a.itemNameAr}","${a.nodeName}","${a.category}",${a.qtyOperational},${a.reorderLevel},${a.deficitQty},${a.suggestedReorderQty},"${a.unit}","${a.status === 'out_of_stock' ? 'نافذ بالكامل' : 'وشيك على النفاد'}"`
-    );
-    const blob = new Blob(['\uFEFF' + headers.concat(rows.join('\n'))], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `تقرير_نواقص_المخزون_${new Date().toISOString().substring(0,10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+  // Export Modern Excel Report
+  const handleExportExcel = async () => {
+    const scopeLabel = selectedNodeId 
+      ? nodes.find(n => n.id === selectedNodeId)?.name || 'وحدة محددة'
+      : (currentNodeName ? `${currentNodeName} (المستودع المخصص)` : 'جميع الوحدات التشغيلية');
 
-  // Print Report
-  const handlePrint = () => {
-    window.print();
+    await exportToModernExcel({
+      fileName: `تقرير_نواقص_المخزون_${new Date().toISOString().substring(0, 10)}`,
+      reportTitle: 'تقرير نواقص المخزون ومستويات إعادة التزويد',
+      scopeName: scopeLabel,
+      metaItems: [
+        { label: 'الأصناف النافذة بالكامل', value: `${outOfStockCount} صنف` },
+        { label: 'الأصناف الوشيكة على النفاد', value: `${aboutToFinishCount} صنف` },
+        { label: 'إجمالي كميات العجز', value: `${totalDeficitQtySum.toLocaleString()} وحدة` },
+      ],
+      columns: [
+        { header: 'كود الصنف', key: 'itemCode', width: 14, align: 'center' },
+        { header: 'اسم الصنف التشغيلي', key: 'itemNameAr', width: 28, align: 'right' },
+        { header: 'المستودع / الوحدة', key: 'nodeName', width: 22, align: 'right' },
+        { header: 'الفئة', key: 'category', width: 16, align: 'center' },
+        { header: 'الرصيد الفعلي المتاح', key: 'qtyOperational', width: 16, isNumeric: true },
+        { header: 'حد التنبيه (الأمان)', key: 'reorderLevel', width: 16, isNumeric: true },
+        { header: 'كمية العجز', key: 'deficitQty', width: 14, isNumeric: true },
+        { header: 'الكمية المقترحة للتزويد', key: 'suggestedReorderQty', width: 18, isNumeric: true },
+        { header: 'وحدة القياس', key: 'unit', width: 12, align: 'center' },
+        { header: 'حالة الرصيد', key: 'statusLabel', width: 16, align: 'center' },
+      ],
+      data: filteredAlerts.map(a => ({
+        itemCode: a.itemCode,
+        itemNameAr: a.itemNameAr,
+        nodeName: a.nodeName,
+        category: a.category || 'عام',
+        qtyOperational: a.qtyOperational,
+        reorderLevel: a.reorderLevel,
+        deficitQty: a.deficitQty,
+        suggestedReorderQty: a.suggestedReorderQty,
+        unit: a.unit || 'وحدة',
+        statusLabel: a.status === 'out_of_stock' ? 'نافذ بالكامل' : 'وشيك على النفاد'
+      })),
+      summaryRow: {
+        itemCode: 'الإجمالي العام',
+        itemNameAr: `عدد الأصناف: ${filteredAlerts.length}`,
+        qtyOperational: filteredAlerts.reduce((sum, a) => sum + a.qtyOperational, 0),
+        deficitQty: totalDeficitQtySum,
+        suggestedReorderQty: filteredAlerts.reduce((sum, a) => sum + a.suggestedReorderQty, 0),
+      }
+    });
   };
 
   return (
@@ -351,14 +379,15 @@ export default function AlertsPage() {
             تحديث
           </Button>
 
-          <Button variant="outline" size="sm" onClick={handleExportCSV} disabled={filteredAlerts.length === 0}>
-            <Download size={14} />
-            تصدير (CSV)
-          </Button>
-
-          <Button variant="ghost" size="sm" onClick={handlePrint}>
-            <Printer size={14} />
-            طباعة
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleExportExcel} 
+            disabled={filteredAlerts.length === 0}
+            className="border-emerald-300 text-emerald-700 bg-emerald-50/60 hover:bg-emerald-100 hover:border-emerald-400 font-bold"
+          >
+            <FileSpreadsheet size={14} className="text-emerald-600" />
+            تصدير إكسيل (Excel)
           </Button>
         </div>
       </div>

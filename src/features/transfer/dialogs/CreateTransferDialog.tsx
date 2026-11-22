@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { X, Plus, Trash2, AlertCircle, FileText, Send, Building2, User, Shirt } from 'lucide-react';
+import { X, Plus, Trash2, AlertCircle, FileText, Send, Building2, User, Shirt, Zap } from 'lucide-react';
 import Button from '../../../components/ui/Button';
 import AsyncItemSelector from '../selectors/AsyncItemSelector';
 import TreeNodeSelector from '../selectors/TreeNodeSelector';
@@ -36,7 +36,8 @@ export const CreateTransferDialog: React.FC<CreateTransferDialogProps> = ({
   onClose,
   onSuccess
 }) => {
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
+  const canDirectTransfer = user?.role === 'admin' || (typeof hasPermission === 'function' && hasPermission('direct_transfer'));
   const {
     currentNodeId,
     isGlobalAdmin,
@@ -133,7 +134,7 @@ export const CreateTransferDialog: React.FC<CreateTransferDialogProps> = ({
     setFieldErrors({});
   };
 
-  const handleSave = (submitForApproval: boolean) => {
+  const handleSave = (submitForApproval: boolean, isDirect: boolean = false) => {
     setDialogError(null);
     const errors: Record<string, string> = {};
 
@@ -176,6 +177,7 @@ export const CreateTransferDialog: React.FC<CreateTransferDialogProps> = ({
         ? (notes.trim() ? `[تحويل للمغسلة] ${notes.trim()}` : '[تحويل للمغسلة]')
         : (notes.trim() || undefined),
       submitForApproval,
+      isDirect,
       lines: lines.map(l => ({
         itemCode: l.itemCode,
         quantity: Number(l.quantity),
@@ -188,7 +190,7 @@ export const CreateTransferDialog: React.FC<CreateTransferDialogProps> = ({
       onSuccess: (res: any) => {
         const msg = typeof res === 'string'
           ? res
-          : (res?.message || (submitForApproval ? `تم إرسال طلب التحويل #${res?.txnId || ''} للاعتماد بنجاح` : `تم إنشاء مسودة الحركة المخزنية #${res?.txnId || ''} بنجاح في نظام COMSYS ERP`));
+          : (res?.message || (isDirect ? `تم الصرف والتحويل الفوري #${res?.txnId || ''} بنجاح واكتمال الحركة فوراً` : submitForApproval ? `تم إرسال طلب التحويل #${res?.txnId || ''} للاعتماد بنجاح` : `تم إنشاء مسودة الحركة المخزنية #${res?.txnId || ''} بنجاح في نظام COMSYS ERP`));
         queryClient.invalidateQueries({ queryKey: ['transfers'] });
         queryClient.invalidateQueries({ queryKey: ['stock'] });
         queryClient.invalidateQueries({ queryKey: ['node-stock'] });
@@ -269,10 +271,15 @@ return (
               {user?.fullNameAr || user?.username || 'المستخدم الحالي'}
             </span>
           </div>
-          <div className="flex items-center gap-2 text-slate-500">
-            <span className="font-semibold">الحالة المبدئية:</span>
+          <div className="flex items-center gap-2">
+            {canDirectTransfer && (
+              <span className="bg-emerald-100 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 rounded-full font-bold text-[10px] flex items-center gap-1">
+                <Zap size={11} className="fill-emerald-600 text-emerald-600" />
+                صلاحية الصرف المباشر مُفعلة
+              </span>
+            )}
             <span className="bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full font-bold text-[10px]">
-              مسودة جديدة (Draft)
+              مسودة / اعتماد / صرف فوري
             </span>
           </div>
         </div>
@@ -573,12 +580,26 @@ return (
               variant="primary"
               size="sm"
               disabled={createMutation.isPending}
-              onClick={() => handleSave(true)}
+              onClick={() => handleSave(true, false)}
               className="gap-1.5 bg-blue-600 hover:bg-blue-700 font-bold"
             >
               <Send size={14} />
               {createMutation.isPending ? 'جاري الإرسال...' : 'تقديم للاعتماد فوراً'}
             </Button>
+            {canDirectTransfer && selectedTxnConfig?.requiresDestination && toNodeId && (
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                disabled={createMutation.isPending}
+                onClick={() => handleSave(false, true)}
+                className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold border border-emerald-500 shadow-xs cursor-pointer"
+                title="صرف مباشر فوري: خصم الكميات من المصدر وإضافتها لمستودع الوجهة فوراً بدون دورة اعتماد"
+              >
+                <Zap size={14} className="fill-white" />
+                {createMutation.isPending ? 'جاري الصرف والتأكيد...' : '⚡ صرف فوري مباشر (بدون اعتماد)'}
+              </Button>
+            )}
           </div>
         </div>
 

@@ -26,6 +26,9 @@ const createTransferSchema = Joi.object({
   }).messages({ 'any.required': 'مستودع الوجهة (إلى) مطلوب' }),
   notes: Joi.string().trim().max(500).allow(null, '').optional(),
   reason: Joi.string().trim().max(200).allow(null, '').optional(),
+  isDirect: Joi.boolean().optional().default(false),
+  directTransfer: Joi.boolean().optional().default(false),
+  submitForApproval: Joi.boolean().optional().default(false),
   lines: Joi.array().items(transferLineSchema).min(1).required()
     .messages({
       'any.required': 'يجب تحديد الأصناف المراد نقلها',

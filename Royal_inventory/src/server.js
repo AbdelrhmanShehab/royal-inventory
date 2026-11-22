@@ -61,6 +61,12 @@ const start = async () => {
             // Initialize background cron jobs
             const { initCronJobs } = require('./services/cron.service');
             initCronJobs();
+
+            // Initialize ZK real-time device listener & auto-sync
+            const { startZkListener } = require('./services/zk.listener.service');
+            startZkListener().catch(err => {
+                logger.warn('[ZK Listener] Startup notice:', { error: err.message });
+            });
         });
 
     } catch (err) {
@@ -80,6 +86,14 @@ const shutdown = async (signal) => {
             // Stop background cron jobs
             const { stopCronJobs } = require('./services/cron.service');
             stopCronJobs();
+
+            // Stop ZK real-time device listener
+            const { stopZkListener } = require('./services/zk.listener.service');
+            try {
+                await stopZkListener();
+            } catch {
+                // Ignore
+            }
 
             await closeSystemDB();
             await closeComsysDB();

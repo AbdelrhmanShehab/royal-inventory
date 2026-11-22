@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
-import { 
-  ClipboardList, 
-  Plus, 
-  Search, 
-  Check, 
-  AlertCircle, 
+import {
+  ClipboardList,
+  Plus,
+  Search,
+  Check,
+  AlertCircle,
   X,
   ArrowDownLeft,
   ArrowUpRight,
@@ -13,7 +13,7 @@ import {
   Inbox,
   Send,
   Sparkles,
-  Download,
+  FileSpreadsheet,
   Filter,
   RotateCcw,
   Clock,
@@ -32,8 +32,9 @@ import TransferDetailsDialog from '../dialogs/TransferDetailsDialog';
 import LaundryReturnsTab from '../components/LaundryReturnsTab';
 import { laundryApi } from '../../../api/laundry.api';
 import { warehousesApi } from '../../../api/warehouses.api';
-import { TRANSFER_PERMISSIONS } from '../constants/transfer.constants';
+import { TRANSFER_PERMISSIONS, TRANSFER_STATUS_CONFIG, TRANSFER_TYPES_CONFIG } from '../constants/transfer.constants';
 import { useWarehouseScope } from '../../../hooks/useWarehouseScope';
+import { exportToModernExcel } from '../../../utils/excelExport';
 
 interface TransferPageProps {
   defaultTab?: 'all' | 'incoming' | 'outgoing' | 'laundry';
@@ -109,19 +110,19 @@ export default function TransferPage({ defaultTab = 'all' }: TransferPageProps) 
     const matchesStatus = filterStatus === 'pending_or_draft'
       ? (item.status === 'pending_approval' || item.status === 'draft')
       : (filterStatus ? item.status === filterStatus : true);
-    
+
     // 3. TxnType filtering
-    const matchesTxnType = filterTxnType 
+    const matchesTxnType = filterTxnType
       ? (filterTxnType === 'laundry' ? (item.txnType === 'laundry' || Number(item.toNodeId) === 29) : item.txnType === filterTxnType)
       : true;
 
     // 4. Warehouse Filters
     const matchesFromNode = filterFromNodeId ? Number(item.fromNodeId) === Number(filterFromNodeId) : true;
     const matchesToNode = filterToNodeId ? Number(item.toNodeId) === Number(filterToNodeId) : true;
-    const matchesAnyNode = filterWarehouseNodeId 
+    const matchesAnyNode = filterWarehouseNodeId
       ? (Number(item.fromNodeId) === Number(filterWarehouseNodeId) || Number(item.toNodeId) === Number(filterWarehouseNodeId))
       : true;
-    
+
     const query = searchQuery.toLowerCase().trim();
     if (!query) {
       return matchesStatus && matchesTxnType && matchesFromNode && matchesToNode && matchesAnyNode;
@@ -133,7 +134,7 @@ export default function TransferPage({ defaultTab = 'all' }: TransferPageProps) 
     const creatorMatch = (item.createdByNameAr || item.creatorUsername || item.createdBy || '').toString().toLowerCase().includes(query);
     const confirmerMatch = (item.confirmerNameAr || item.confirmerUsername || '').toString().toLowerCase().includes(query);
 
-    return matchesStatus && matchesTxnType && matchesFromNode && matchesToNode && matchesAnyNode && 
+    return matchesStatus && matchesTxnType && matchesFromNode && matchesToNode && matchesAnyNode &&
       (idMatch || fromMatch || toMatch || creatorMatch || confirmerMatch);
   }).sort((a, b) => Number(b.id) - Number(a.id));
 
@@ -169,25 +170,47 @@ export default function TransferPage({ defaultTab = 'all' }: TransferPageProps) 
   const outgoingApprovedCount = transfers.filter(t => (isGlobalAdmin || Number(t.fromNodeId) === currentNodeId) && t.status === 'approved').length;
   const shippedInTransitCount = transfers.filter(t => (isGlobalAdmin || Number(t.toNodeId) === currentNodeId || Number(t.fromNodeId) === currentNodeId) && t.status === 'shipped').length;
 
-  // Export CSV
-  const handleExportCSV = () => {
-    const headers = ['رقم الحركة,نوع الحركة,مستودع المصدر,مستودع الوجهة,المنشئ,التاريخ,عدد الأصناف,الحالة\n'];
-    const rows = filteredTransfers.map(t =>
-      `#${t.id},${t.txnType},${t.fromNodeNameAr || t.fromNodeId},${t.toNodeNameAr || t.toNodeId || '—'},${t.createdByNameAr || t.createdBy},${t.createdAt || ''},${t.itemCount},${t.status}`
-    );
-    const blob = new Blob(['\uFEFF' + headers.concat(rows.join('\n'))], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `حركات_وتحويلات_المخزون_${new Date().toISOString().substring(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  // Export Modern Excel Report
+  const handleExportExcel = async () => {
+    await exportToModernExcel({
+      fileName: `سجل_حركات_وتحويلات_المخزون_${new Date().toISOString().substring(0, 10)}`,
+      reportTitle: 'سجل حركات وتحويلات المخزون التشغيلي',
+      scopeName: currentNodeName || 'جميع المستودعات والوحدات التشغيلية',
+      columns: [
+        { header: 'رقم الحركة', key: 'id', width: 14, align: 'center' },
+        { header: 'نوع الحركة', key: 'txnTypeLabel', width: 22, align: 'center' },
+        { header: 'مستودع المصدر', key: 'fromNodeName', width: 24, align: 'right' },
+        { header: 'مستودع الوجهة', key: 'toNodeName', width: 24, align: 'right' },
+        { header: 'منشئ المستند', key: 'creator', width: 20, align: 'right' },
+        { header: 'تاريخ الحركة', key: 'createdAt', width: 18, align: 'center' },
+        { header: 'عدد الأصناف', key: 'itemCount', width: 14, isNumeric: true },
+        { header: 'حالة المسار', key: 'statusLabel', width: 18, align: 'center' },
+      ],
+      data: filteredTransfers.map(t => {
+        const typeConfig = TRANSFER_TYPES_CONFIG[t.txnType] || { label: t.txnType };
+        const statusConfig = TRANSFER_STATUS_CONFIG[t.status] || { label: t.status };
+        return {
+          id: `#${t.id}`,
+          txnTypeLabel: typeConfig.label,
+          fromNodeName: t.fromNodeNameAr || `مستودع #${t.fromNodeId}`,
+          toNodeName: t.toNodeNameAr || (t.toNodeId ? `مستودع #${t.toNodeId}` : '— (عملية داخلية)'),
+          creator: t.createdByNameAr || t.creatorUsername || (t.createdBy ? `مستخدم #${t.createdBy}` : 'أمين المستودع'),
+          createdAt: t.createdAt ? new Date(t.createdAt).toLocaleDateString('ar-EG') : '—',
+          itemCount: t.itemCount || 0,
+          statusLabel: statusConfig.label
+        };
+      }),
+      summaryRow: {
+        id: 'الإجمالي العام',
+        txnTypeLabel: `إجمالي الحركات: ${filteredTransfers.length}`,
+        itemCount: filteredTransfers.reduce((sum, t) => sum + (t.itemCount || 0), 0)
+      }
+    });
   };
 
   return (
     <div className="flex flex-col gap-6 font-arabic select-none" dir="rtl">
-      
+
       {/* Top Banner & Controls */}
       <div className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-xs">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
@@ -204,17 +227,18 @@ export default function TransferPage({ defaultTab = 'all' }: TransferPageProps) 
             <Button
               variant="outline"
               size="sm"
-              onClick={handleExportCSV}
-              className="gap-1.5 text-xs font-bold text-slate-700 hover:text-slate-900 border-slate-200"
+              onClick={handleExportExcel}
+              disabled={filteredTransfers.length === 0}
+              className="gap-1.5 text-xs font-bold border-emerald-300 text-emerald-700 bg-emerald-50/60 hover:bg-emerald-100 hover:border-emerald-400 cursor-pointer"
             >
-              <Download size={14} />
-              تصدير السجل (CSV)
+              <FileSpreadsheet size={14} className="text-emerald-600" />
+              تصدير إكسيل (Excel)
             </Button>
             <PermissionGate permission={TRANSFER_PERMISSIONS.CREATE_DRAFT}>
-              <Button 
-                variant="primary" 
-                size="sm" 
-                onClick={() => setIsCreateOpen(true)} 
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setIsCreateOpen(true)}
                 className="gap-2 shadow-xs bg-blue-600 hover:bg-blue-700 font-bold"
               >
                 <Plus size={15} />
@@ -226,9 +250,9 @@ export default function TransferPage({ defaultTab = 'all' }: TransferPageProps) 
 
         {/* Workflow Stats Bar */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
-          
+
           {/* Card 1: Incoming Pending */}
-          <div 
+          <div
             onClick={() => {
               if (activeTab === 'incoming' && filterStatus === 'pending_approval') {
                 setActiveTab('all');
@@ -238,28 +262,27 @@ export default function TransferPage({ defaultTab = 'all' }: TransferPageProps) 
                 setFilterStatus('pending_approval');
               }
             }}
-            className={`cursor-pointer transition-all duration-200 rounded-xl p-3 flex items-center justify-between border ${
-              activeTab === 'incoming' && filterStatus === 'pending_approval'
+            className={`cursor-pointer transition-all duration-200 rounded-xl p-3 flex items-center justify-between border ${activeTab === 'incoming' && filterStatus === 'pending_approval'
                 ? 'bg-amber-100/90 border-amber-500 shadow-md ring-2 ring-amber-400/50 scale-[1.02]'
                 : 'bg-amber-50/60 border-amber-200/80 hover:bg-amber-100/60 hover:border-amber-300 hover:shadow-xs'
-            }`}
+              }`}
           >
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center font-bold">
                 <Inbox size={16} />
               </div>
-              <div className="flex flex-col text-right">
-                <span className="text-[10px] text-amber-700 font-bold">طلبات واردة بانتظار الاعتماد</span>
-                <span className="text-xs font-extrabold text-amber-900">{incomingPendingCount} مستند</span>
+              <div className="flex flex-col text-right min-w-0">
+                <span className="text-[11px] text-amber-700 font-bold whitespace-nowrap truncate">وارد بانتظار الاعتماد</span>
+                <span className="text-xs font-extrabold text-amber-900 whitespace-nowrap">{incomingPendingCount} مستند</span>
               </div>
             </div>
             {activeTab === 'incoming' && filterStatus === 'pending_approval' && (
-              <span className="text-[9px] bg-amber-600 text-white px-1.5 py-0.5 rounded font-bold">مُفعل</span>
+              <span className="text-[9px] bg-amber-600 text-white px-1.5 py-0.5 rounded font-bold shrink-0">مُفعل</span>
             )}
           </div>
 
           {/* Card 2: Outgoing Pending / Draft */}
-          <div 
+          <div
             onClick={() => {
               if (activeTab === 'outgoing' && (filterStatus === 'pending_or_draft' || filterStatus === 'pending_approval')) {
                 setActiveTab('all');
@@ -269,28 +292,27 @@ export default function TransferPage({ defaultTab = 'all' }: TransferPageProps) 
                 setFilterStatus('pending_or_draft');
               }
             }}
-            className={`cursor-pointer transition-all duration-200 rounded-xl p-3 flex items-center justify-between border ${
-              activeTab === 'outgoing' && (filterStatus === 'pending_or_draft' || filterStatus === 'pending_approval')
+            className={`cursor-pointer transition-all duration-200 rounded-xl p-3 flex items-center justify-between border ${activeTab === 'outgoing' && (filterStatus === 'pending_or_draft' || filterStatus === 'pending_approval')
                 ? 'bg-orange-100/90 border-orange-500 shadow-md ring-2 ring-orange-400/50 scale-[1.02]'
                 : 'bg-orange-50/60 border-orange-200/80 hover:bg-orange-100/60 hover:border-orange-300 hover:shadow-xs'
-            }`}
+              }`}
           >
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-orange-100 text-orange-800 flex items-center justify-center font-bold">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-lg bg-orange-100 text-orange-800 flex items-center justify-center font-bold shrink-0">
                 <Send size={16} />
               </div>
-              <div className="flex flex-col text-right">
-                <span className="text-[10px] text-orange-700 font-bold">طلبات صادرة بانتظار الاعتماد</span>
-                <span className="text-xs font-extrabold text-orange-900">{outgoingPendingDraftCount} مستند</span>
+              <div className="flex flex-col text-right min-w-0">
+                <span className="text-[11px] text-orange-700 font-bold whitespace-nowrap truncate">صادر بانتظار الاعتماد</span>
+                <span className="text-xs font-extrabold text-orange-900 whitespace-nowrap">{outgoingPendingDraftCount} مستند</span>
               </div>
             </div>
             {activeTab === 'outgoing' && (filterStatus === 'pending_or_draft' || filterStatus === 'pending_approval') && (
-              <span className="text-[9px] bg-orange-600 text-white px-1.5 py-0.5 rounded font-bold">مُفعل</span>
+              <span className="text-[9px] bg-orange-600 text-white px-1.5 py-0.5 rounded font-bold shrink-0">مُفعل</span>
             )}
           </div>
 
           {/* Card 3: Outgoing Approved */}
-          <div 
+          <div
             onClick={() => {
               if (activeTab === 'outgoing' && filterStatus === 'approved') {
                 setActiveTab('all');
@@ -300,28 +322,27 @@ export default function TransferPage({ defaultTab = 'all' }: TransferPageProps) 
                 setFilterStatus('approved');
               }
             }}
-            className={`cursor-pointer transition-all duration-200 rounded-xl p-3 flex items-center justify-between border ${
-              activeTab === 'outgoing' && filterStatus === 'approved'
+            className={`cursor-pointer transition-all duration-200 rounded-xl p-3 flex items-center justify-between border ${activeTab === 'outgoing' && filterStatus === 'approved'
                 ? 'bg-blue-100/90 border-blue-500 shadow-md ring-2 ring-blue-400/50 scale-[1.02]'
                 : 'bg-blue-50/60 border-blue-200/80 hover:bg-blue-100/60 hover:border-blue-300 hover:shadow-xs'
-            }`}
+              }`}
           >
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-800 flex items-center justify-center font-bold">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-800 flex items-center justify-center font-bold shrink-0">
                 <Truck size={16} />
               </div>
-              <div className="flex flex-col text-right">
-                <span className="text-[10px] text-blue-700 font-bold">طلبات معتمدة جاهزة للشحن</span>
-                <span className="text-xs font-extrabold text-blue-900">{outgoingApprovedCount} مستند</span>
+              <div className="flex flex-col text-right min-w-0">
+                <span className="text-[11px] text-blue-700 font-bold whitespace-nowrap truncate">معتمد للشحن</span>
+                <span className="text-xs font-extrabold text-blue-900 whitespace-nowrap">{outgoingApprovedCount} مستند</span>
               </div>
             </div>
             {activeTab === 'outgoing' && filterStatus === 'approved' && (
-              <span className="text-[9px] bg-blue-600 text-white px-1.5 py-0.5 rounded font-bold">مُفعل</span>
+              <span className="text-[9px] bg-blue-600 text-white px-1.5 py-0.5 rounded font-bold shrink-0">مُفعل</span>
             )}
           </div>
 
           {/* Card 4: Shipped in Transit */}
-          <div 
+          <div
             onClick={() => {
               if (filterStatus === 'shipped') {
                 setActiveTab('all');
@@ -331,28 +352,27 @@ export default function TransferPage({ defaultTab = 'all' }: TransferPageProps) 
                 setFilterStatus('shipped');
               }
             }}
-            className={`cursor-pointer transition-all duration-200 rounded-xl p-3 flex items-center justify-between border ${
-              filterStatus === 'shipped'
+            className={`cursor-pointer transition-all duration-200 rounded-xl p-3 flex items-center justify-between border ${filterStatus === 'shipped'
                 ? 'bg-indigo-100/90 border-indigo-500 shadow-md ring-2 ring-indigo-400/50 scale-[1.02]'
                 : 'bg-indigo-50/60 border-indigo-200/80 hover:bg-indigo-100/60 hover:border-indigo-300 hover:shadow-xs'
-            }`}
+              }`}
           >
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-800 flex items-center justify-center font-bold">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-800 flex items-center justify-center font-bold shrink-0">
                 <PackageCheck size={16} />
               </div>
-              <div className="flex flex-col text-right">
-                <span className="text-[10px] text-indigo-700 font-bold">شحنات جارية في الطريق</span>
-                <span className="text-xs font-extrabold text-indigo-900">{shippedInTransitCount} مستند</span>
+              <div className="flex flex-col text-right min-w-0">
+                <span className="text-[11px] text-indigo-700 font-bold whitespace-nowrap truncate">شحنات قيد النقل</span>
+                <span className="text-xs font-extrabold text-indigo-900 whitespace-nowrap">{shippedInTransitCount} مستند</span>
               </div>
             </div>
             {filterStatus === 'shipped' && (
-              <span className="text-[9px] bg-indigo-600 text-white px-1.5 py-0.5 rounded font-bold">مُفعل</span>
+              <span className="text-[9px] bg-indigo-600 text-white px-1.5 py-0.5 rounded font-bold shrink-0">مُفعل</span>
             )}
           </div>
 
           {/* Card 5: Laundry Returns */}
-          <div 
+          <div
             onClick={() => {
               if (activeTab === 'laundry') {
                 setActiveTab('all');
@@ -360,76 +380,71 @@ export default function TransferPage({ defaultTab = 'all' }: TransferPageProps) 
                 setActiveTab('laundry');
               }
             }}
-            className={`cursor-pointer transition-all duration-200 rounded-xl p-3 flex items-center justify-between border ${
-              activeTab === 'laundry'
+            className={`cursor-pointer transition-all duration-200 rounded-xl p-3 flex items-center justify-between border ${activeTab === 'laundry'
                 ? 'bg-emerald-100/90 border-emerald-500 shadow-md ring-2 ring-emerald-400/50 scale-[1.02]'
                 : 'bg-emerald-50/60 border-emerald-200/80 hover:bg-emerald-100/60 hover:border-emerald-300 hover:shadow-xs'
-            }`}
+              }`}
           >
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold shrink-0">
                 <Sparkles size={16} />
               </div>
-              <div className="flex flex-col text-right">
-                <span className="text-[10px] text-emerald-700 font-bold">مرتجع واستلام المغسلة</span>
-                <span className="text-xs font-extrabold text-emerald-900">{pendingLaundryCount > 0 ? `${pendingLaundryCount} بانتظار الاستلام` : 'استلام بياضات'}</span>
+              <div className="flex flex-col text-right min-w-0">
+                <span className="text-[11px] text-emerald-700 font-bold whitespace-nowrap truncate">مرتجع المغسلة</span>
+                <span className="text-xs font-extrabold text-emerald-900 whitespace-nowrap">{pendingLaundryCount > 0 ? `${pendingLaundryCount} بانتظار الاستلام` : 'استلام بياضات'}</span>
               </div>
             </div>
             {activeTab === 'laundry' && (
-              <span className="text-[9px] bg-emerald-600 text-white px-1.5 py-0.5 rounded font-bold">مُفعل</span>
+              <span className="text-[9px] bg-emerald-600 text-white px-1.5 py-0.5 rounded font-bold shrink-0">مُفعل</span>
             )}
           </div>
 
         </div>
 
         {/* Tab Navigation Header */}
-        <div className="flex items-center gap-2 border-b border-slate-200 pb-3 mb-4">
+        <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3 mb-4">
           <button
             onClick={() => setActiveTab('all')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeTab === 'all'
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'all'
                 ? 'bg-slate-900 text-white shadow-xs'
                 : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-            }`}
+              }`}
           >
             <ClipboardList size={14} />
             جميع الحركات
           </button>
-          
+
           <button
             onClick={() => setActiveTab('incoming')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeTab === 'incoming'
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'incoming'
                 ? 'bg-blue-600 text-white shadow-xs'
                 : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-            }`}
+              }`}
           >
             <ArrowDownLeft size={14} />
-            التحويلات الواردة (إلى {currentNodeName})
+            التحويلات الواردة
           </button>
 
           <button
             onClick={() => setActiveTab('outgoing')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeTab === 'outgoing'
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'outgoing'
                 ? 'bg-indigo-600 text-white shadow-xs'
                 : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-            }`}
+              }`}
           >
             <ArrowUpRight size={14} />
-            التحويلات الصادرة (من {currentNodeName})
+            التحويلات الصادرة
           </button>
 
           <button
             onClick={() => setActiveTab('laundry')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeTab === 'laundry'
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'laundry'
                 ? 'bg-emerald-700 text-white shadow-xs'
                 : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-            }`}
+              }`}
           >
             <Sparkles size={14} />
-            مرتجع المغسلة (استلام البياضات)
+            مرتجع المغسلة
             {pendingLaundryCount > 0 && (
               <span className="bg-amber-500 text-white text-[10px] px-1.5 py-0.2 rounded-full font-extrabold animate-pulse">
                 {pendingLaundryCount}
@@ -458,15 +473,14 @@ export default function TransferPage({ defaultTab = 'all' }: TransferPageProps) 
             </div>
 
             <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
-              
+
               {/* All */}
               <button
                 onClick={() => setFilterStatus('')}
-                className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 border whitespace-nowrap ${
-                  filterStatus === ''
+                className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 border whitespace-nowrap ${filterStatus === ''
                     ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
                     : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                }`}
+                  }`}
               >
                 <span>جميع المراحل</span>
                 <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-black ${filterStatus === '' ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-600'}`}>
@@ -477,11 +491,10 @@ export default function TransferPage({ defaultTab = 'all' }: TransferPageProps) 
               {/* Draft */}
               <button
                 onClick={() => setFilterStatus(filterStatus === 'draft' ? '' : 'draft')}
-                className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 border whitespace-nowrap ${
-                  filterStatus === 'draft'
+                className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 border whitespace-nowrap ${filterStatus === 'draft'
                     ? 'bg-slate-700 text-white border-slate-700 shadow-xs ring-2 ring-slate-400/40'
                     : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                }`}
+                  }`}
               >
                 <FileEdit size={13} className="text-slate-400" />
                 <span>1. مسودة (Draft)</span>
@@ -493,11 +506,10 @@ export default function TransferPage({ defaultTab = 'all' }: TransferPageProps) 
               {/* Pending Approval */}
               <button
                 onClick={() => setFilterStatus(filterStatus === 'pending_approval' ? '' : 'pending_approval')}
-                className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 border whitespace-nowrap ${
-                  filterStatus === 'pending_approval'
+                className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 border whitespace-nowrap ${filterStatus === 'pending_approval'
                     ? 'bg-amber-600 text-white border-amber-600 shadow-xs ring-2 ring-amber-400/50'
                     : 'bg-amber-50/60 text-amber-900 border-amber-200/80 hover:bg-amber-100/60'
-                }`}
+                  }`}
               >
                 <Clock size={13} className={filterStatus === 'pending_approval' ? 'text-white' : 'text-amber-600'} />
                 <span>2. بانتظار الاعتماد</span>
@@ -509,11 +521,10 @@ export default function TransferPage({ defaultTab = 'all' }: TransferPageProps) 
               {/* Approved */}
               <button
                 onClick={() => setFilterStatus(filterStatus === 'approved' ? '' : 'approved')}
-                className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 border whitespace-nowrap ${
-                  filterStatus === 'approved'
+                className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 border whitespace-nowrap ${filterStatus === 'approved'
                     ? 'bg-blue-600 text-white border-blue-600 shadow-xs ring-2 ring-blue-400/50'
                     : 'bg-blue-50/60 text-blue-900 border-blue-200/80 hover:bg-blue-100/60'
-                }`}
+                  }`}
               >
                 <CheckCircle2 size={13} className={filterStatus === 'approved' ? 'text-white' : 'text-blue-600'} />
                 <span>3. معتمد للشحن</span>
@@ -525,11 +536,10 @@ export default function TransferPage({ defaultTab = 'all' }: TransferPageProps) 
               {/* Shipped */}
               <button
                 onClick={() => setFilterStatus(filterStatus === 'shipped' ? '' : 'shipped')}
-                className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 border whitespace-nowrap ${
-                  filterStatus === 'shipped'
+                className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 border whitespace-nowrap ${filterStatus === 'shipped'
                     ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs ring-2 ring-indigo-400/50'
                     : 'bg-indigo-50/60 text-indigo-900 border-indigo-200/80 hover:bg-indigo-100/60'
-                }`}
+                  }`}
               >
                 <Truck size={13} className={filterStatus === 'shipped' ? 'text-white' : 'text-indigo-600'} />
                 <span>4. قيد التوصيل (مشحون)</span>
@@ -541,11 +551,10 @@ export default function TransferPage({ defaultTab = 'all' }: TransferPageProps) 
               {/* Confirmed / Completed */}
               <button
                 onClick={() => setFilterStatus(filterStatus === 'confirmed' ? '' : 'confirmed')}
-                className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 border whitespace-nowrap ${
-                  filterStatus === 'confirmed'
+                className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 border whitespace-nowrap ${filterStatus === 'confirmed'
                     ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs ring-2 ring-emerald-400/50'
                     : 'bg-emerald-50/60 text-emerald-900 border-emerald-200/80 hover:bg-emerald-100/60'
-                }`}
+                  }`}
               >
                 <PackageCheck size={13} className={filterStatus === 'confirmed' ? 'text-white' : 'text-emerald-600'} />
                 <span>5. مكتمل ومستلم</span>
@@ -557,11 +566,10 @@ export default function TransferPage({ defaultTab = 'all' }: TransferPageProps) 
               {/* Cancelled */}
               <button
                 onClick={() => setFilterStatus(filterStatus === 'cancelled' ? '' : 'cancelled')}
-                className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 border whitespace-nowrap ${
-                  filterStatus === 'cancelled'
+                className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 border whitespace-nowrap ${filterStatus === 'cancelled'
                     ? 'bg-red-600 text-white border-red-600 shadow-xs ring-2 ring-red-400/50'
                     : 'bg-red-50/60 text-red-900 border-red-200/80 hover:bg-red-100/60'
-                }`}
+                  }`}
               >
                 <XCircle size={13} className={filterStatus === 'cancelled' ? 'text-white' : 'text-red-600'} />
                 <span>ملغي / مرفوض</span>
@@ -577,11 +585,11 @@ export default function TransferPage({ defaultTab = 'all' }: TransferPageProps) 
         {/* Detailed Filters & Search Row (Only shown when not in laundry tab) */}
         {activeTab !== 'laundry' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 pt-3 border-t border-slate-100">
-            
+
             {/* Search Input */}
             <div className="relative flex items-center lg:col-span-2">
               <Search size={15} className="absolute right-3 text-slate-400 pointer-events-none" />
-              <input 
+              <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -683,9 +691,9 @@ export default function TransferPage({ defaultTab = 'all' }: TransferPageProps) 
       ) : isLoading ? (
         <TransferTableSkeleton />
       ) : (
-        <TransferTable 
-          transfers={filteredTransfers} 
-          onSelect={(id) => setSelectedTransferId(id)} 
+        <TransferTable
+          transfers={filteredTransfers}
+          onSelect={(id) => setSelectedTransferId(id)}
         />
       )}
 

@@ -12,7 +12,7 @@ const sql = require('mssql');
  * Transfer Service — all business logic for drafting, submitting, approving, dispatching, and confirming transfers.
  */
 
-const createTransferDraft = async ({ txnType = 'internal_transfer', createdBy, fromNodeId, toNodeId = null, notes = null, reason = null, lines = [], submitForApproval = false }) => {
+const createTransferDraft = async ({ txnType = 'internal_transfer', createdBy, fromNodeId, toNodeId = null, notes = null, reason = null, lines = [], submitForApproval = false, isDirect = false }) => {
   const isTransferOrReturn = txnType === 'internal_transfer' || txnType === 'return';
   if (isTransferOrReturn && fromNodeId === toNodeId) {
     throw new BadRequestError('لا يمكن التحويل لنفس المستودع');
@@ -36,20 +36,20 @@ const createTransferDraft = async ({ txnType = 'internal_transfer', createdBy, f
     await transaction.begin();
 
     const isSingleNodeOp = txnType === 'consumption' || txnType === 'damage' || txnType === 'waste' || txnType === 'disposal';
-    const initialStatus = isSingleNodeOp ? 'confirmed' : (submitForApproval ? 'pending_approval' : 'draft');
+    const initialStatus = isDirect ? 'confirmed' : (isSingleNodeOp ? 'confirmed' : (submitForApproval ? 'pending_approval' : 'draft'));
 
     const txnId = await transferRepo.createTransferHeader({
       txnType,
       nodeId: fromNodeId,
       createdBy,
-      notes,
+      notes: isDirect ? (notes ? `[صرف مباشر فوري] ${notes}` : '[صرف مباشر فوري]') : notes,
       status: initialStatus,
     }, transaction);
 
     await transferRepo.createTransferDetail(txnId, {
       fromNodeId,
       toNodeId,
-      reason,
+      reason: isDirect ? (reason ? `[صرف مباشر] ${reason}` : 'صرف مباشر فوري للأدوار') : reason,
     }, transaction);
 
     for (const line of lines) {
@@ -66,7 +66,11 @@ const createTransferDraft = async ({ txnType = 'internal_transfer', createdBy, f
         notes: line.notes || null,
       }, transaction);
 
-      if (isSingleNodeOp) {
+      if (isDirect && isTransferOrReturn) {
+        // Direct transfer between 2 nodes: deduct from source and add to destination immediately!
+        await stockRepo.adjustStock(fromNodeId, line.itemCode, 'qty_transferred_out', qty, transaction);
+        await stockRepo.adjustStock(toNodeId, line.itemCode, 'qty_internal_in', qty, transaction);
+      } else if (isSingleNodeOp) {
         const field = txnType === 'consumption' ? 'qty_consumed'
           : txnType === 'damage' ? 'qty_damaged'
           : txnType === 'waste' ? 'qty_wasted'
@@ -75,11 +79,32 @@ const createTransferDraft = async ({ txnType = 'internal_transfer', createdBy, f
       }
     }
 
+    if (isDirect) {
+      // Audit log and set confirmed_by / confirmed_at
+      await transaction.request()
+        .input('txnId', sql.Int, txnId)
+        .input('userId', sql.Int, createdBy)
+        .query(`
+          UPDATE ops.transaction_headers
+          SET confirmed_by = @userId,
+              confirmed_at = GETDATE()
+          WHERE txn_id = @txnId;
+
+          BEGIN TRY
+            INSERT INTO ops.audit_logs (user_id, username, action, entity_type, entity_id, old_value, new_value, logged_at)
+            SELECT @userId, u.username, 'direct_transfer_confirmed', 'transfer', @txnId, 'draft', 'confirmed', GETDATE()
+            FROM ops.app_users u WHERE u.user_id = @userId;
+          END TRY
+          BEGIN CATCH
+          END CATCH
+        `);
+    }
+
     await transaction.commit();
-    return { txnId };
+    return { txnId, status: initialStatus, isDirect };
   } catch (err) {
     await transaction.rollback();
-    throw new DatabaseError(`فشل في إنشاء مسودة العملية التشغيلية: ${err.message}`);
+    throw new DatabaseError(`فشل في إنشاء العملية التشغيلية: ${err.message}`);
   }
 };
 

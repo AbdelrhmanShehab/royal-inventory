@@ -79,7 +79,15 @@ export const UniformDashboard: React.FC = () => {
         setChartData(data.chartData);
       }
 
-      const cList = Array.isArray(checkinsRes) ? checkinsRes : (checkinsRes?.data || []);
+      const cList = Array.isArray(checkinsRes)
+        ? checkinsRes
+        : (Array.isArray(checkinsRes?.items)
+            ? checkinsRes.items
+            : (Array.isArray(checkinsRes?.data?.items)
+                ? checkinsRes.data.items
+                : (Array.isArray(checkinsRes?.data)
+                    ? checkinsRes.data
+                    : [])));
       setLiveCheckins(cList);
     } catch (err) {
       console.error('Failed to load ZK uniform dashboard details:', err);

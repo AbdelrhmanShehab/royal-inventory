@@ -226,14 +226,19 @@ const getLaundryStock = asyncHandler(async (req, res) => {
 
 const getLatestZkCheckins = asyncHandler(async (req, res) => {
   const { page, pageSize, limit, fromDate, toDate, search } = req.query;
-  const result = await service.getLatestZkCheckins({
-    page: page ? parseInt(page, 10) : undefined,
-    pageSize: pageSize ? parseInt(pageSize, 10) : (limit ? parseInt(limit, 10) : 50),
-    limit: limit ? parseInt(limit, 10) : undefined,
-    fromDate,
-    toDate,
-    search,
-  });
+  const isPaginated = page !== undefined || pageSize !== undefined || fromDate || toDate || search;
+  const result = await service.getLatestZkCheckins(
+    isPaginated
+      ? {
+          page: page ? parseInt(page, 10) : 1,
+          pageSize: pageSize ? parseInt(pageSize, 10) : (limit ? parseInt(limit, 10) : 50),
+          limit: limit ? parseInt(limit, 10) : undefined,
+          fromDate,
+          toDate,
+          search,
+        }
+      : (limit ? parseInt(limit, 10) : 10)
+  );
   return R.success(res, result, 'تم جلب آخر عمليات البصمة بنجاح');
 });
 

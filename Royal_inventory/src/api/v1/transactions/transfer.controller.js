@@ -5,7 +5,7 @@ const asyncHandler = require('../../../utils/asyncHandler');
 const R = require('../../../utils/response.helper');
 
 const createTransferDraft = asyncHandler(async (req, res) => {
-  const { txnType, fromNodeId, toNodeId, notes, reason, lines, submitForApproval } = req.body;
+  const { txnType, fromNodeId, toNodeId, notes, reason, lines, submitForApproval, isDirect, directTransfer } = req.body;
   const isTransferOrReturn = !txnType || txnType === 'internal_transfer' || txnType === 'return';
   if (!fromNodeId || (isTransferOrReturn && !toNodeId) || !lines || lines.length === 0) {
     return R.badRequest(res, 'مخزن المصدر، مخزن الوجهة (للحركات التحويلية)، والأصناف مطلوبة');
@@ -14,6 +14,15 @@ const createTransferDraft = asyncHandler(async (req, res) => {
   const parsedFromNodeId = parseInt(fromNodeId);
   if (req.user.allowedNodeIds && !req.user.allowedNodeIds.includes(parsedFromNodeId)) {
     return R.forbidden(res, 'لا يمكنك إجراء أو إنشاء حركات لمستودع خارج نطاق صلاحياتك المعتمدة');
+  }
+
+  const direct = Boolean(isDirect || directTransfer);
+  if (direct && req.user.role !== 'admin') {
+    const permissionsCache = require('../../../services/permissions.cache');
+    const allowed = await permissionsCache.hasPermission(req.user.role, 'direct_transfer');
+    if (!allowed) {
+      return R.forbidden(res, 'ليس لديك صلاحية الصرف المباشر الفوري للأدوار (direct_transfer)');
+    }
   }
 
   const result = await service.createTransferDraft({
@@ -25,9 +34,12 @@ const createTransferDraft = asyncHandler(async (req, res) => {
     reason,
     lines,
     submitForApproval: Boolean(submitForApproval),
+    isDirect: direct,
   });
 
-  const msg = submitForApproval ? 'تم إنشاء ورسالة طلب التحويل للاعتماد بنجاح' : 'تم إنشاء مسودة العملية بنجاح';
+  const msg = direct
+    ? 'تم الصرف والتحويل الفوري بنجاح وتحديث أرصدة المستودعات فوراً'
+    : (submitForApproval ? 'تم إنشاء وإرسال طلب التحويل للاعتماد بنجاح' : 'تم إنشاء مسودة العملية بنجاح');
   return R.created(res, result, msg);
 });
 

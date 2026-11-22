@@ -54,21 +54,28 @@ const getLatestCheckins = async (options = 10) => {
       dataReq.input('search', sql.NVarChar(100), search.trim());
     }
 
-    // 1. Calculate overall stats across all matching records
-    const statsResult = await countReq.query(`
-      SELECT 
-        COUNT(1) AS total,
-        COUNT(DISTINCT c.USERID) AS uniqueUsers,
-        COUNT(CASE WHEN CAST(c.CHECKTIME AS DATE) = CAST(GETDATE() AS DATE) THEN 1 END) AS todayCount
-      FROM dbo.CHECKINOUT c
-      LEFT JOIN dbo.USERINFO u ON c.USERID = u.USERID
-      LEFT JOIN dbo.DEPARTMENTS d ON u.DEFAULTDEPTID = d.DEPTID
-      ${whereClause}
-    `);
+    const isPaginated = page !== undefined || pageSize !== undefined || fromDate || toDate || search;
+    let total = 0;
+    let uniqueUsers = 0;
+    let todayCount = 0;
 
-    const total = statsResult.recordset[0]?.total || 0;
-    const uniqueUsers = statsResult.recordset[0]?.uniqueUsers || 0;
-    const todayCount = statsResult.recordset[0]?.todayCount || 0;
+    // 1. Calculate overall stats across all matching records ONLY when paginated or filtered
+    if (isPaginated) {
+      const statsResult = await countReq.query(`
+        SELECT 
+          COUNT(1) AS total,
+          COUNT(DISTINCT c.USERID) AS uniqueUsers,
+          COUNT(CASE WHEN CAST(c.CHECKTIME AS DATE) = CAST(GETDATE() AS DATE) THEN 1 END) AS todayCount
+        FROM dbo.CHECKINOUT c
+        LEFT JOIN dbo.USERINFO u ON c.USERID = u.USERID
+        LEFT JOIN dbo.DEPARTMENTS d ON u.DEFAULTDEPTID = d.DEPTID
+        ${whereClause}
+      `);
+
+      total = statsResult.recordset[0]?.total || 0;
+      uniqueUsers = statsResult.recordset[0]?.uniqueUsers || 0;
+      todayCount = statsResult.recordset[0]?.todayCount || 0;
+    }
 
     // 2. Paginated rows
     const p = Math.max(1, parseInt(page, 10) || 1);
@@ -96,7 +103,7 @@ const getLatestCheckins = async (options = 10) => {
     `);
 
     // If caller requested pagination or filtering, return structured object
-    if (page !== undefined || pageSize !== undefined || fromDate || toDate || search) {
+    if (isPaginated) {
       return {
         items: dataResult.recordset || [],
         stats: {

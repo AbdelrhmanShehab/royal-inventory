@@ -18,7 +18,15 @@ export default function SettingsPage() {
       const syncStatus = await laundryApi.getLastPosSync();
       setLastSync(syncStatus || null);
       const res = await laundryApi.getZkCheckins(10);
-      const checkins = Array.isArray(res) ? res : (res?.data || []);
+      const checkins = Array.isArray(res)
+        ? res
+        : (Array.isArray(res?.items)
+            ? res.items
+            : (Array.isArray(res?.data?.items)
+                ? res.data.items
+                : (Array.isArray(res?.data)
+                    ? res.data
+                    : [])));
       setZkCheckins(checkins || []);
     } catch (err) {
       console.error('Failed to load settings details:', err);

@@ -116,6 +116,7 @@ export interface CreateTransferPayload {
   reason?: string;
   lines: CreateTransferLinePayload[];
   submitForApproval?: boolean;
+  isDirect?: boolean;
 }
 
 export interface TransferFilterParams {

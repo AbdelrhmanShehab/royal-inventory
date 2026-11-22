@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  ArrowUpDown, 
-  Download, 
-  Info, 
-  Package, 
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  ArrowUpDown,
+  FileSpreadsheet,
+  Info,
+  Package,
   History,
   Edit3,
   Sliders,
@@ -21,9 +21,9 @@ import type { StockItem } from '../../types/inventory';
 import { transactionsApi } from '../../api/transactions.api';
 import type { OrganizationNode } from '../../types/hierarchy';
 import type { TransferTransaction } from '../../types/transaction';
-import { CATEGORIES } from '../../utils/constants';
 import { useWarehouseScope } from '../../hooks/useWarehouseScope';
 import { getItemReorderLevel, setItemReorderLevel } from '../../utils/reorderLevels';
+import { exportToModernExcel } from '../../utils/excelExport';
 
 export default function InventoryPage() {
   const [nodes, setNodes] = useState<OrganizationNode[]>([]);
@@ -44,8 +44,20 @@ export default function InventoryPage() {
   // Filter States
   const [searchName, setSearchName] = useState('');
   const [searchSku, setSearchSku] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedUnit, setSelectedUnit] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'warning' | 'depleted'>('all');
+
+  // Extract unique available units from items
+  const availableUnits = useMemo(() => {
+    const unitSet = new Set<string>();
+    items.forEach(item => {
+      const u = item.unit?.trim();
+      if (u) {
+        unitSet.add(u);
+      }
+    });
+    return Array.from(unitSet).sort((a, b) => a.localeCompare(b, 'ar'));
+  }, [items]);
 
   // Sorting State
   const [sortField, setSortField] = useState<keyof StockItem>('item_code');
@@ -174,21 +186,21 @@ export default function InventoryPage() {
 
   // Status counts for filter chips
   const countAvailable = items.filter(i => i.qty_operational > getItemReorderLevel(i.item_code, i.reorder_level ?? 10)).length;
-  const countWarning  = items.filter(i => i.qty_operational > 0 && i.qty_operational <= getItemReorderLevel(i.item_code, i.reorder_level ?? 10)).length;
+  const countWarning = items.filter(i => i.qty_operational > 0 && i.qty_operational <= getItemReorderLevel(i.item_code, i.reorder_level ?? 10)).length;
   const countDepleted = items.filter(i => i.qty_operational === 0).length;
 
   // Filter Logic
   const filteredItems = items.filter(item => {
-    const matchesName = (item.item_name_ar || '').includes(searchName);
-    const matchesSku = (item.item_code || '').toLowerCase().includes(searchSku.toLowerCase());
-    const matchesCategory = selectedCategory ? item.category === selectedCategory : true;
+    const matchesName = (item.item_name_ar || '').toLowerCase().includes(searchName.trim().toLowerCase());
+    const matchesSku = (item.item_code || '').toLowerCase().includes(searchSku.trim().toLowerCase());
+    const matchesUnit = selectedUnit ? (item.unit || '').trim() === selectedUnit.trim() : true;
     const reorder = getItemReorderLevel(item.item_code, item.reorder_level ?? 10);
     const matchesStatus =
-      statusFilter === 'all'       ? true
-      : statusFilter === 'depleted'  ? item.qty_operational === 0
-      : statusFilter === 'warning'   ? item.qty_operational > 0 && item.qty_operational <= reorder
-      : /* available */               item.qty_operational > reorder;
-    return matchesName && matchesSku && matchesCategory && matchesStatus;
+      statusFilter === 'all' ? true
+        : statusFilter === 'depleted' ? item.qty_operational === 0
+          : statusFilter === 'warning' ? item.qty_operational > 0 && item.qty_operational <= reorder
+            : /* available */               item.qty_operational > reorder;
+    return matchesName && matchesSku && matchesUnit && matchesStatus;
   });
 
   // Sort Logic
@@ -197,12 +209,12 @@ export default function InventoryPage() {
     let bVal = b[sortField] ?? '';
 
     if (typeof aVal === 'string') {
-      return sortOrder === 'asc' 
-        ? (aVal as string).localeCompare(bVal as string) 
+      return sortOrder === 'asc'
+        ? (aVal as string).localeCompare(bVal as string)
         : (bVal as string).localeCompare(aVal as string);
     } else {
-      return sortOrder === 'asc' 
-        ? (aVal as number) - (bVal as number) 
+      return sortOrder === 'asc'
+        ? (aVal as number) - (bVal as number)
         : (bVal as number) - (aVal as number);
     }
   });
@@ -243,21 +255,53 @@ export default function InventoryPage() {
     setIsDrawerOpen(true);
   };
 
-  // Export CSV
-  const handleExport = () => {
-    const nodeName = nodes.find(n => n.id === selectedNodeId)?.name || 'وحدة_تشغيلية';
-    const headers = ['كود الصنف,اسم الصنف,الرصيد الفعلي,حد التنبيه,الكمية المستلمة,تحويلات,مغسلة,استهلاك تشغيلي,مرتجع,تالف وهدر واستبعاد\n'];
-    const rows = filteredItems.map(i => 
-      `${i.item_code},"${(i.item_name_ar || '').replace(/"/g, '""')}",${i.qty_operational},${getItemReorderLevel(i.item_code, i.reorder_level ?? 10)},${i.qty_received || 0},${i.qty_transfers || 0},${i.qty_laundry || 0},${i.qty_consumed || 0},${i.qty_returned || 0},${i.qty_wasted || 0}`
-    );
-    const blob = new Blob(['\uFEFF' + headers.concat(rows.join('\n'))], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `مخزون_${nodeName}_${new Date().toISOString().substring(0,10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  // Export Modern Excel Report
+  const handleExport = async () => {
+    const nodeName = nodes.find(n => n.id === selectedNodeId)?.name || currentNodeName || 'وحدة تشغيلية';
+    await exportToModernExcel({
+      fileName: `مخزون_${nodeName}_${new Date().toISOString().substring(0, 10)}`,
+      reportTitle: `تقرير مستويات المخزون — ${nodeName}`,
+      scopeName: nodeName,
+      columns: [
+        { header: 'كود الصنف', key: 'item_code', width: 14, align: 'center' },
+        { header: 'اسم الصنف التشغيلي', key: 'item_name_ar', width: 28, align: 'right' },
+        { header: 'وحدة القياس', key: 'unit', width: 12, align: 'center' },
+        { header: 'الرصيد الفعلي المتاح', key: 'qty_operational', width: 16, isNumeric: true },
+        { header: 'حد التنبيه', key: 'reorder_level', width: 14, isNumeric: true },
+        { header: 'إجمالي المستلم', key: 'qty_received', width: 14, isNumeric: true },
+        { header: 'تحويلات صادرة', key: 'qty_transfers', width: 14, isNumeric: true },
+        { header: 'بالمغسلة', key: 'qty_laundry', width: 12, isNumeric: true },
+        { header: 'استهلاك تشغيلي', key: 'qty_consumed', width: 14, isNumeric: true },
+        { header: 'مرتجع للمخزن', key: 'qty_returned', width: 14, isNumeric: true },
+        { header: 'تالف وهدر واستبعاد', key: 'qty_wasted', width: 16, isNumeric: true },
+        { header: 'حالة الرصيد', key: 'status_label', width: 16, align: 'center' },
+      ],
+      data: filteredItems.map(i => {
+        const customReorder = getItemReorderLevel(i.item_code, i.reorder_level ?? 10);
+        const statusLabel = i.qty_operational === 0 ? 'نافذ من المخزون' : i.qty_operational <= customReorder ? 'وشيك على النفاد' : 'متوفر';
+        return {
+          item_code: i.item_code,
+          item_name_ar: i.item_name_ar,
+          unit: i.unit || 'وحدة',
+          qty_operational: i.qty_operational,
+          reorder_level: customReorder,
+          qty_received: i.qty_received || 0,
+          qty_transfers: i.qty_transfers || 0,
+          qty_laundry: i.qty_laundry || 0,
+          qty_consumed: i.qty_consumed || 0,
+          qty_returned: i.qty_returned || 0,
+          qty_wasted: i.qty_wasted || 0,
+          status_label: statusLabel
+        };
+      }),
+      summaryRow: {
+        item_code: 'الإجمالي العام',
+        item_name_ar: `إجمالي الأصناف: ${filteredItems.length}`,
+        qty_operational: filteredItems.reduce((sum, i) => sum + i.qty_operational, 0),
+        qty_received: filteredItems.reduce((sum, i) => sum + (i.qty_received || 0), 0),
+        qty_consumed: filteredItems.reduce((sum, i) => sum + (i.qty_consumed || 0), 0),
+      }
+    });
   };
 
   if (loadingNodes) {
@@ -266,7 +310,7 @@ export default function InventoryPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      
+
       {/* Search and Advanced Filters Panel */}
       <div className="bg-white border border-slate-200/80 p-5 rounded-2xl shadow-xs select-none">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
@@ -299,10 +343,16 @@ export default function InventoryPage() {
                 </span>
               )}
             </div>
-            
-            <Button variant="outline" size="sm" onClick={handleExport} disabled={filteredItems.length === 0}>
-              <Download size={14} />
-              تصدير البيانات (CSV)
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExport}
+              disabled={filteredItems.length === 0}
+              className="border-emerald-300 text-emerald-700 bg-emerald-50/60 hover:bg-emerald-100 hover:border-emerald-400 font-bold"
+            >
+              <FileSpreadsheet size={14} className="text-emerald-600" />
+              تصدير إكسيل (Excel)
             </Button>
           </div>
         </div>
@@ -311,7 +361,7 @@ export default function InventoryPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-bold text-slate-500">اسم الصنف</label>
-            <input 
+            <input
               type="text"
               value={searchName}
               onChange={(e) => { setSearchName(e.target.value); setCurrentPage(1); }}
@@ -322,7 +372,7 @@ export default function InventoryPage() {
 
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-bold text-slate-500">كود الصنف (Item Code)</label>
-            <input 
+            <input
               type="text"
               value={searchSku}
               onChange={(e) => { setSearchSku(e.target.value); setCurrentPage(1); }}
@@ -332,15 +382,32 @@ export default function InventoryPage() {
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-bold text-slate-500">الفئة</label>
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] font-bold text-slate-500">وحدة القياس</label>
+              {(searchName || searchSku || selectedUnit || statusFilter !== 'all') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchName('');
+                    setSearchSku('');
+                    setSelectedUnit('');
+                    setStatusFilter('all');
+                    setCurrentPage(1);
+                  }}
+                  className="text-[10px] font-semibold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                >
+                  إعادة ضبط
+                </button>
+              )}
+            </div>
             <select
-              value={selectedCategory}
-              onChange={(e) => { setSelectedCategory(e.target.value); setCurrentPage(1); }}
-              className="px-3.5 py-1.5 bg-slate-50 border border-slate-200 text-xs rounded-lg text-slate-700 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              value={selectedUnit}
+              onChange={(e) => { setSelectedUnit(e.target.value); setCurrentPage(1); }}
+              className="px-3.5 py-1.5 bg-slate-50 border border-slate-200 text-xs rounded-lg text-slate-700 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 cursor-pointer"
             >
-              <option value="">الكل</option>
-              {CATEGORIES.map((cat, idx) => (
-                <option key={idx} value={cat}>{cat}</option>
+              <option value="">الكل (جميع الوحدات)</option>
+              {availableUnits.map((unit, idx) => (
+                <option key={idx} value={unit}>{unit}</option>
               ))}
             </select>
           </div>
@@ -351,55 +418,47 @@ export default function InventoryPage() {
           <span className="text-[10px] font-black text-slate-500 uppercase tracking-wide">حالة الرصيد:</span>
           <button
             onClick={() => { setStatusFilter('all'); setCurrentPage(1); }}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-              statusFilter === 'all'
-                ? 'bg-slate-800 text-white border-slate-800 shadow-sm'
-                : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400 hover:bg-slate-50'
-            }`}
+            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${statusFilter === 'all'
+              ? 'bg-slate-800 text-white border-slate-800 shadow-sm'
+              : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400 hover:bg-slate-50'
+              }`}
           >
             الكل
-            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
-              statusFilter === 'all' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
-            }`}>{items.length}</span>
+            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${statusFilter === 'all' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+              }`}>{items.length}</span>
           </button>
           <button
             onClick={() => { setStatusFilter('available'); setCurrentPage(1); }}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-              statusFilter === 'available'
-                ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
-                : 'bg-white text-emerald-700 border-emerald-200 hover:border-emerald-400 hover:bg-emerald-50'
-            }`}
+            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${statusFilter === 'available'
+              ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+              : 'bg-white text-emerald-700 border-emerald-200 hover:border-emerald-400 hover:bg-emerald-50'
+              }`}
           >
             متوفر
-            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
-              statusFilter === 'available' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-700'
-            }`}>{countAvailable}</span>
+            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${statusFilter === 'available' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-700'
+              }`}>{countAvailable}</span>
           </button>
           <button
             onClick={() => { setStatusFilter('warning'); setCurrentPage(1); }}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-              statusFilter === 'warning'
-                ? 'bg-amber-500 text-white border-amber-500 shadow-sm'
-                : 'bg-white text-amber-700 border-amber-200 hover:border-amber-400 hover:bg-amber-50'
-            }`}
+            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${statusFilter === 'warning'
+              ? 'bg-amber-500 text-white border-amber-500 shadow-sm'
+              : 'bg-white text-amber-700 border-amber-200 hover:border-amber-400 hover:bg-amber-50'
+              }`}
           >
             تحذير — وشيك على النفاد
-            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
-              statusFilter === 'warning' ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-700'
-            }`}>{countWarning}</span>
+            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${statusFilter === 'warning' ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-700'
+              }`}>{countWarning}</span>
           </button>
           <button
             onClick={() => { setStatusFilter('depleted'); setCurrentPage(1); }}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-              statusFilter === 'depleted'
-                ? 'bg-red-600 text-white border-red-600 shadow-sm'
-                : 'bg-white text-red-700 border-red-200 hover:border-red-400 hover:bg-red-50'
-            }`}
+            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${statusFilter === 'depleted'
+              ? 'bg-red-600 text-white border-red-600 shadow-sm'
+              : 'bg-white text-red-700 border-red-200 hover:border-red-400 hover:bg-red-50'
+              }`}
           >
             نافذ من المخزون
-            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
-              statusFilter === 'depleted' ? 'bg-white/20 text-white' : 'bg-red-100 text-red-700'
-            }`}>{countDepleted}</span>
+            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${statusFilter === 'depleted' ? 'bg-white/20 text-white' : 'bg-red-100 text-red-700'
+              }`}>{countDepleted}</span>
           </button>
         </div>
       </div>
@@ -446,8 +505,8 @@ export default function InventoryPage() {
                     const statusLabel = item.qty_operational === 0 ? 'نافذ' : isLow ? 'وشيك على النفاد' : 'متوفر';
 
                     return (
-                      <tr 
-                        key={`${item.item_code}-${idx}`} 
+                      <tr
+                        key={`${item.item_code}-${idx}`}
                         className="odd:bg-white even:bg-slate-50/50 hover:bg-blue-50/40 transition-colors duration-150 divide-x divide-x-reverse divide-slate-200/80"
                       >
                         <td className="px-4 py-3.5 text-xs font-mono font-bold text-slate-700 bg-slate-50/30">{item.item_code}</td>
@@ -477,14 +536,14 @@ export default function InventoryPage() {
                         {/* Details Drawer Button — prominent */}
                         <td className="px-3 py-3 text-center">
                           <div className="flex items-center justify-center gap-2">
-                            <button 
+                            <button
                               onClick={(e) => { e.stopPropagation(); handleOpenEditThreshold(e, item); }}
                               className="p-1.5 rounded-lg text-indigo-400 hover:text-indigo-700 hover:bg-indigo-50 border border-transparent hover:border-indigo-200 transition-all cursor-pointer"
                               title="تعديل حد التنبيه"
                             >
                               <Edit3 size={14} />
                             </button>
-                            <button 
+                            <button
                               onClick={(e) => { e.stopPropagation(); handleRowClick(item); }}
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-bold shadow-xs transition-all cursor-pointer"
                               title="عرض بطاقة الصنف والتفاصيل الكاملة"
@@ -527,9 +586,9 @@ export default function InventoryPage() {
             </div>
 
             <div className="flex items-center gap-1.5">
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 disabled={currentPage === 1}
                 onClick={() => handlePageChange(currentPage - 1)}
               >
@@ -543,24 +602,23 @@ export default function InventoryPage() {
                     </span>
                   );
                 }
-                
+
                 return (
                   <button
                     key={page}
                     onClick={() => handlePageChange(page as number)}
-                    className={`min-w-8 h-8 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      currentPage === page 
-                        ? 'bg-blue-600 text-white shadow-xs' 
-                        : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-                    }`}
+                    className={`min-w-8 h-8 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${currentPage === page
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
                   >
                     {page}
                   </button>
                 );
               })}
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 disabled={currentPage >= totalPages || totalPages === 0}
                 onClick={() => handlePageChange(currentPage + 1)}
               >
@@ -580,7 +638,7 @@ export default function InventoryPage() {
       >
         {selectedItem && (
           <div className="flex flex-col gap-6">
-            
+
             {/* 1. Item Header Overview */}
             <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 flex justify-between items-center">
               <div className="flex flex-col text-right">
@@ -659,7 +717,7 @@ export default function InventoryPage() {
                 <History size={14} className="text-blue-500" />
                 سجل الحركة المباشرة للصنف ({itemTransactions.length})
               </h3>
-              
+
               {itemTransactions.length === 0 ? (
                 <div className="text-center py-6 border border-dashed border-slate-200 rounded-xl text-xs text-slate-400">
                   لا توجد حركات سابقة مسجلة على هذا الصنف.

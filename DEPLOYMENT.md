@@ -44,6 +44,28 @@ This system packages the full-stack Royal Inventory application (React frontend 
 
 ---
 
+## ⚡ Automated 1-Click Remote Deployment (192.168.50.5:7575)
+
+You no longer need to copy files manually, extract zips, or use Remote Desktop (RDP) to the server. Simply execute:
+
+```bat
+deploy-to-server.bat
+```
+*(or run `npm run deploy`)*
+
+### What the Automated Script Does:
+1. **Connectivity Check**: Pings `192.168.50.5` and verifies write permissions on `\\192.168.50.5\e$\royal_inventory`.
+2. **Builds Frontend**: Executes `npm run build` locally.
+3. **Smoke Test**: Validates local backend integrity before deployment.
+4. **Graceful Shutdown**: Stops the Windows Service `inventory_tracking_system` remotely via RPC.
+5. **High-Speed Sync**: Synchronizes only modified frontend (`dist/` $\rightarrow$ `app/public`) and backend (`Royal_inventory/src/` $\rightarrow$ `app/src`) files in seconds via Robocopy.
+   - Preserves production `app/.env` and `data/logs` safely.
+6. **Restarts Service**: Starts `inventory_tracking_system` remotely.
+7. **Live Verification**: Probes `http://192.168.50.5:7575/health` to confirm HTTP 200 and database connectivity.
+   - Total deployment time: **~10-25 seconds**.
+
+---
+
 ## 1. Development Machine: Packaging
 
 To build and package the production deployment:
