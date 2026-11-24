@@ -13,8 +13,9 @@ const sql = require('mssql');
  */
 
 const createTransferDraft = async ({ txnType = 'internal_transfer', createdBy, fromNodeId, toNodeId = null, notes = null, reason = null, lines = [], submitForApproval = false, isDirect = false }) => {
-  const isTransferOrReturn = txnType === 'internal_transfer' || txnType === 'return';
-  if (isTransferOrReturn && fromNodeId === toNodeId) {
+  const isLaundry = txnType === 'laundry' || Number(toNodeId) === 29;
+  const isTransferOrReturn = txnType === 'internal_transfer' || txnType === 'return' || isLaundry;
+  if (!isLaundry && isTransferOrReturn && fromNodeId === toNodeId) {
     throw new BadRequestError('لا يمكن التحويل لنفس المستودع');
   }
   if (!lines || lines.length === 0) {
@@ -24,7 +25,7 @@ const createTransferDraft = async ({ txnType = 'internal_transfer', createdBy, f
   const fromNode = await hierarchyRepo.getNodeById(fromNodeId);
   if (!fromNode || !fromNode.isActive) throw new NotFoundError('مخزن المصدر غير موجود أو غير نشط');
 
-  if (isTransferOrReturn) {
+  if (isTransferOrReturn && !isLaundry) {
     const toNode = await hierarchyRepo.getNodeById(toNodeId);
     if (!toNode || !toNode.isActive) throw new NotFoundError('مخزن الوجهة غير موجود أو غير نشط');
   }
@@ -48,8 +49,8 @@ const createTransferDraft = async ({ txnType = 'internal_transfer', createdBy, f
 
     await transferRepo.createTransferDetail(txnId, {
       fromNodeId,
-      toNodeId,
-      reason: isDirect ? (reason ? `[صرف مباشر] ${reason}` : 'صرف مباشر فوري للأدوار') : reason,
+      toNodeId: isLaundry ? (toNodeId || 29) : toNodeId,
+      reason: isDirect ? (reason ? `[صرف مباشر] ${reason}` : (isLaundry ? 'صرف مباشر فوري للمغسلة' : 'صرف مباشر فوري للأدوار')) : reason,
     }, transaction);
 
     for (const line of lines) {
@@ -67,15 +68,50 @@ const createTransferDraft = async ({ txnType = 'internal_transfer', createdBy, f
       }, transaction);
 
       if (isDirect && isTransferOrReturn) {
-        // Direct transfer between 2 nodes: deduct from source and add to destination immediately!
-        await stockRepo.adjustStock(fromNodeId, line.itemCode, 'qty_transferred_out', qty, transaction);
-        await stockRepo.adjustStock(toNodeId, line.itemCode, 'qty_internal_in', qty, transaction);
+        if (isLaundry) {
+          // Direct to laundry: deduct from source warehouse into laundry tracking
+          await stockRepo.adjustStock(fromNodeId, line.itemCode, 'qty_laundry', qty, transaction);
+        } else {
+          // Direct transfer between 2 nodes: deduct from source and add to destination immediately!
+          await stockRepo.adjustStock(fromNodeId, line.itemCode, 'qty_transferred_out', qty, transaction);
+          await stockRepo.adjustStock(toNodeId, line.itemCode, 'qty_internal_in', qty, transaction);
+        }
       } else if (isSingleNodeOp) {
         const field = txnType === 'consumption' ? 'qty_consumed'
           : txnType === 'damage' ? 'qty_damaged'
           : txnType === 'waste' ? 'qty_wasted'
           : 'qty_disposed';
         await stockRepo.adjustStock(fromNodeId, line.itemCode, field, qty, transaction);
+      }
+    }
+
+    if (isDirect && isLaundry) {
+      const laundryTransferId = await laundryRepo.createTransfer({
+        fromWarehouseId: fromNodeId,
+        status: 'sent',
+        notes: notes || `صرف مباشر فوري إلى المغسلة - مستند رقم #${txnId}`,
+        createdBy,
+      }, transaction);
+
+      for (const line of lines) {
+        const qty = parseFloat(line.quantity);
+        await laundryRepo.createTransferItem({
+          transferId: laundryTransferId,
+          itemCode: line.itemCode,
+          itemNameAr: line.itemNameAr || null,
+          sentQty: qty,
+          receivedQty: 0,
+          remainingQty: qty,
+          unitCode: line.unitCode || null,
+          unitCost: parseFloat(line.unitCost || 0),
+        }, transaction);
+
+        await laundryRepo.upsertReconciliation({
+          itemCode: line.itemCode,
+          itemNameAr: line.itemNameAr || null,
+          sentQty: qty,
+          inProgressQty: qty,
+        }, transaction);
       }
     }
 

@@ -5,6 +5,7 @@ const Joi = require('joi');
 const transferLineSchema = Joi.object({
   itemCode: Joi.string().trim().required()
     .messages({ 'any.required': 'كود الصنف مطلوب' }),
+  itemNameAr: Joi.string().trim().allow(null, '').optional(),
   quantity: Joi.number().positive().required()
     .messages({
       'any.required': 'الكمية المطلوبة للتحويل غير محددة',
@@ -16,7 +17,7 @@ const transferLineSchema = Joi.object({
 });
 
 const createTransferSchema = Joi.object({
-  txnType: Joi.string().valid('consumption','internal_transfer','return','damage','waste','disposal').default('internal_transfer'),
+  txnType: Joi.string().valid('consumption','internal_transfer','return','damage','waste','disposal','laundry').default('internal_transfer'),
   fromNodeId: Joi.number().integer().positive().required()
     .messages({ 'any.required': 'مستودع المصدر (من) مطلوب' }),
   toNodeId: Joi.number().integer().positive().when('txnType', {

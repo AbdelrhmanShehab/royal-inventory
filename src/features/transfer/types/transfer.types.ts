@@ -102,6 +102,7 @@ export interface TransferDetails extends TransferSummary {
 
 export interface CreateTransferLinePayload {
   itemCode: string;
+  itemNameAr?: string | null;
   quantity: number;
   unitCode?: string | null;
   unitCost?: number;
